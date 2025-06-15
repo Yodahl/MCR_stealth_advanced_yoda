@@ -283,8 +283,8 @@
 /*
  *	レーン角度
  */
-#define LANE_ANGLE_R 95 // 右レーンアングル 95
-#define LANE_ANGLE_L 95 // 左レーンアングル 95
+#define LANE_ANGLE_R 105 // 右レーンアングル 95
+#define LANE_ANGLE_L 105 // 左レーンアングル 95
 /*
  *	クランク角度
  */
@@ -332,13 +332,13 @@ typedef enum
   CORNER_SPEED_ADDR = 0x06, // コーナー速度
   CRANK_SPEED_ADDR = 0x07,  // クランク進入速度
   LANE_SPEED_ADDR = 0x08,   // レーン進入速度
-                            // SLOPE_UP_ADDR		=		0x09,	// 坂感知閾値
-                            // LANE_ANGLE_L_ADDR	=		0x09,	// 左レーンアングル
-                            // LANE_ANGLE_R_ADDR	=		0x0A,	// 右レーンアングル
-                            // SENS_L_THOLD1_ADDR	=		0x0B,	// アナログセンサ左閾値(上位)
-                            // SENS_L_THOLD2_ADDR	=		0x0C,	// アナログセンサ左閾値(下位)
-                            // SENS_R_THOLD1_ADDR	=		0x0D,	// アナログセンサ右閾値(上位)
-                            // SENS_R_THOLD2_ADDR	=		0x0E,	// アナログセンサ右閾値(下位)
+  SLOPE_SPEED_ADDR = 0x09,     // 坂感知閾値
+  // LANE_ANGLE_L_ADDR	=		0x09,	// 左レーンアングル
+  // LANE_ANGLE_R_ADDR	=		0x0A,	// 右レーンアングル
+  // SENS_L_THOLD1_ADDR	=		0x0B,	// アナログセンサ左閾値(上位)
+  // SENS_L_THOLD2_ADDR	=		0x0C,	// アナログセンサ左閾値(下位)
+  // SENS_R_THOLD1_ADDR	=		0x0D,	// アナログセンサ右閾値(上位)
+  // SENS_R_THOLD2_ADDR	=		0x0E,	// アナログセンサ右閾値(下位)
   // DF_KP_OVER_ADDR=0x09 /* トレース大外れ比例制御係数   */
   // DF_KD_OVER_ADDR= 0x0A /* トレース大外れ微分制御係数   */
   // DF_TH_OVER_ADDR= 0x0B /* 大外れ閾値                   */
