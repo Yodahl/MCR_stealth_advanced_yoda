@@ -413,7 +413,7 @@ void loop()
         if (digiSensLL == ON)
         {
             linellcount++;
-            if (linellcount > 40) // 30
+            if (linellcount > 45) // 30
             {
                 sensLLon = ON;
                 // CPU_LED_2 = ON;
@@ -429,7 +429,7 @@ void loop()
         if (digiSensRR == ON)
         {
             linerrcount++;
-            if (linerrcount > 40)
+            if (linerrcount > 45)
             {
                 sensRRon = ON;
                 // CPU_LED_2 = ON;
@@ -472,7 +472,7 @@ void loop()
                 lEncoderBuff = lEncoderTotal;
             }
             // 登坂検出
-            if (slopeCheck() && abs(getServoAngle()) < 10 && lEncoderTotal - lEncoderBuff >= 10000 && !check_leftline() && !check_rightline())
+            if (slopeCheck() && abs(getServoAngle()) < 10 && lEncoderTotal - lEncoderBuff >= 5000 && !check_leftline() && !check_rightline())
             {
                 // 坂走行処理へ	のぼるくん
                 pattern = 50;
@@ -627,19 +627,19 @@ void loop()
             { // 片方向2回ずつ振る計4回
                 // 閾値計算
                 int threshold = (sensorMax - sensorMin) * Judg_percent; // CC閾値
-                // int thresholdRL = (((sensorMaxRR - sensorMinRR) + (sensorMaxLL - sensorMinLL)) / 2) * Judg_percent; // RR,LL閾値
-                int thresholdRR = (sensorMaxRR - sensorMinRR) * Judg_percent;                                      // RR閾値
-                int thresholdLL = (sensorMaxLL - sensorMinLL) * Judg_percent;                                      // LL閾値
+                int thresholdRL = (((sensorMaxRR - sensorMinRR) + (sensorMaxLL - sensorMinLL)) / 2) * Judg_percent; // RR,LL閾値
+                // int thresholdRR = (sensorMaxRR - sensorMinRR) * Judg_percent;                                      // RR閾値
+                // int thresholdLL = (sensorMaxLL - sensorMinLL) * Judg_percent;                                      // LL閾値
                 int thresholdU = (((sensorMaxUR - sensorMinUR) + (sensorMaxUL - sensorMinUL)) / 2) * Judg_percent; // UR,UL閾値
                 // int thresholdUL = (sensorMaxUL - sensorMinUL) * Judg_percent; // UL閾値
                 int threshold_BK = (sensorMax - sensorMin) * Judg_BK_percent; // UR,UL閾値
 
                 thrSensUR = thresholdU;
-                thrSensRR = thresholdRR;
+                thrSensRR = thresholdRL;
                 thrSensCR = threshold;
                 thrSensCC = threshold;
                 thrSensCL = threshold;
-                thrSensLL = thresholdLL;
+                thrSensLL = thresholdRL;
                 thrSensUL = thresholdU;
                 thrSensBK = threshold_BK;
 
@@ -857,7 +857,7 @@ void loop()
             iSetAngle = 0;
             PDtrace_Control(i, data_buff[SLOPE_SPEED_ADDR]);
 
-            if (lEncoderTotal - lEncoderBuff >= 2000)
+            if (lEncoderTotal - lEncoderBuff >= 2000 /*|| slopeCheck()*/)
             {
                 pattern = 11;
                 lEncoderBuff = lEncoderTotal;
@@ -873,10 +873,7 @@ void loop()
             servoPwmOut(iServoPwm);
             R_LED = ON;
             L_LED = ON;
-            // motor_f(-85, -85);
-            // motor_r(-80, -80);
             PDtrace_Control(i, data_buff[CRANK_SPEED_ADDR]);
-            // if (cnt1 >= 50)
             if (lEncoderTotal - lEncoderBuff >= 350) // 350
             {                                        // 誤読み防止(225mm)
                 cnt1 = 0;
@@ -894,23 +891,6 @@ void loop()
         case 104: // クロスライン後の処理(1段目の減速処理)
             servoPwmOut(iServoPwm);
             PDtrace_Control(i, data_buff[CRANK_SPEED_ADDR]);
-            /*
-            if (iEncoder >= data_buff[CRANK_SPEED_ADDR] + 2)
-            {                    // エンコーダによりスピード制御
-              motor_f(-45, -45); //-25
-              motor_r(-65, -65); //-50
-            }
-            else if (iEncoder >= data_buff[CRANK_SPEED_ADDR])
-            {
-              motor_f(25, 25);
-              motor_r(25, 25);
-            }
-            else
-            {
-              motor_f(60, 60);
-              motor_r(60, 60);
-            }
-              */
 
             if (lEncoderTotal - lEncoderBuff >= 200) // 200
             {
@@ -923,29 +903,13 @@ void loop()
         case 106: // クランク処理 (2段目の減速処理)　ハーフライン検出
             servoPwmOut(iServoPwm);
             PDtrace_Control(i, data_buff[CRANK_SPEED_ADDR]);
-            /*
-            if (iEncoder >= data_buff[CRANK_SPEED_ADDR] + 2)
-            { // エンコーダによりスピード制御
-              motor_f(-20, -20);
-              motor_r(-20, -20);
-            }
-            else if (iEncoder >= data_buff[CRANK_SPEED_ADDR])
-            {
-              motor_f(10, 10);
-              motor_r(10, 10);
-            }
-            else
-            {
-              motor_f(60, 60);
-              motor_r(60, 60);
-            }
-            */
             if (sensLLon == ON)
             // if (digiSensLL == ON)
             {                              // クランク方向　左
                 crankDirection = 'L';      // クランク方向記憶変数＝左クランク
                 iSetAngle = CRANK_ANGLE_L; /* +で左 -で右に曲がります      */
                 servoPwmOut(iServoPwm2);
+                lEncoderBuff = lEncoderTotal;
                 pattern = 108;
                 break;
             }
@@ -3654,7 +3618,7 @@ void LOG_rec(void)
     saveDataA[0][logCt] = digiSensLL << 2 | digiSensCC << 1 | digiSensRR;
     saveDataA[1][logCt] = iEncoder;
     saveDataA[2][logCt] = pattern;
-    saveDataA[3][logCt] = (p[3] * 1000);
+    saveDataA[3][logCt] = lEncoderTotal - lEncoderBuff;
     saveDataA[4][logCt] = getServoAngle();
     saveDataA[5][logCt] = iSetAngle;
     saveDataA[6][logCt] = anaSensCR_diff;
@@ -3669,25 +3633,6 @@ void LOG_rec(void)
     // saveDataA[15][logCt] = ;
 
     logCt++;
-    // }
-    // else
-    // {
-    //   saveDataB[0][logCt] = digiSensLL << 2 | digiSensCC << 1 | digiSensRR;
-    //   saveDataB[1][logCt] = iEncoder;
-    //   saveDataB[2][logCt] = pattern;
-    //   saveDataB[3][logCt] = cource;
-    //   saveDataB[4][logCt] = getServoAngle();
-    //   saveDataB[5][logCt] = iAngle2;
-    //   saveDataB[6][logCt] = anaSensCR_diff;
-    //   saveDataB[7][logCt] = anaSensCL_diff;
-    //   saveDataB[8][logCt] = anaSensCC_diff;
-    //   saveDataB[9][logCt] = motor_buff_stare;  //: PWMステアリング;
-    //   saveDataB[10][logCt] = motor_buff_Fr;    //: PWM前右;
-    //   saveDataB[11][logCt] = motor_buff_Fl;    //: PWM前左;
-    //   saveDataB[12][logCt] = motor_buff_Rr;    //: PWM後右;
-    //   saveDataB[13][logCt] = motor_buff_Rl;    //: PWM後左;
-    //   saveDataB[14][logCt] = logCt;
-    // }
 
     if (logCt >= LOG_BUFF_SIZE)
     {

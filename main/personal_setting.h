@@ -283,8 +283,8 @@
 /*
  *	レーン角度
  */
-#define LANE_ANGLE_R 105 // 右レーンアングル 95
-#define LANE_ANGLE_L 105 // 左レーンアングル 95
+#define LANE_ANGLE_R 110 // 右レーンアングル 95
+#define LANE_ANGLE_L 110 // 左レーンアングル 95
 /*
  *	クランク角度
  */
