@@ -211,8 +211,11 @@ volatile int8_t linerrcount = 0;
 volatile int8_t sensLLon = OFF;
 volatile int8_t sensRRon = OFF;
 
+volatile bool SLOPE_flag = true;
+
 volatile bool START_flag = false;
 volatile bool Run_end = false;
+
 
 /*
  *	エンコーダ関連
@@ -247,10 +250,6 @@ volatile int16_t cource = 0; // コースハズレ値
  *	DataFlash関係
  */
 uint8_t data_buff[16];
-
-/*
- *	autoBreak関係ん関係
- */
 
 // トレース用
 volatile short Angle_D;    //
@@ -450,6 +449,7 @@ void loop()
                 cnt1 = 0;
                 crankMode = 1;
                 pattern = 101;
+                SLOPE_flag = true;
                 lEncoderBuff = lEncoderTotal;
             }
 
@@ -459,6 +459,7 @@ void loop()
                 cnt1 = 0;
                 laneMode = 1;
                 pattern = 151;
+                SLOPE_flag = true;
                 laneDirection = 'L';
                 lEncoderBuff = lEncoderTotal;
             }
@@ -468,11 +469,12 @@ void loop()
                 cnt1 = 0;
                 laneMode = 1;
                 pattern = 151;
+                SLOPE_flag = true;
                 laneDirection = 'R';
                 lEncoderBuff = lEncoderTotal;
             }
             // 登坂検出
-            if (slopeCheck() && abs(getServoAngle()) < 10 && lEncoderTotal - lEncoderBuff >= 5000 && !check_leftline() && !check_rightline())
+            if (slopeCheck() && abs(getServoAngle()) < 8 && SLOPE_flag && !check_leftline() && !check_rightline())
             {
                 // 坂走行処理へ	のぼるくん
                 pattern = 50;
@@ -541,7 +543,7 @@ void loop()
             static int step = 1;       // サーボの移動
             static int cycleCount = 0; // 首を振った回数
 
-            static float Judg_percent = 0.4;    // 閾値パーセント  0.4
+            static float Judg_percent = 0.42;    // 閾値パーセント  0.4
             static float Judg_BK_percent = 0.2; // 閾値パーセント
 
             // iAngle0 = getServoAngle(); /* 0度の位置記憶 */
@@ -626,20 +628,20 @@ void loop()
             else
             { // 片方向2回ずつ振る計4回
                 // 閾値計算
-                int threshold = (sensorMax - sensorMin) * Judg_percent; // CC閾値
-                int thresholdRL = (((sensorMaxRR - sensorMinRR) + (sensorMaxLL - sensorMinLL)) / 2) * Judg_percent; // RR,LL閾値
-                // int thresholdRR = (sensorMaxRR - sensorMinRR) * Judg_percent;                                      // RR閾値
-                // int thresholdLL = (sensorMaxLL - sensorMinLL) * Judg_percent;                                      // LL閾値
+                int threshold = (sensorMax - sensorMin) * Judg_percent;                                             // CC閾値
+                // int thresholdRL = (((sensorMaxRR - sensorMinRR) + (sensorMaxLL - sensorMinLL)) / 2) * Judg_percent; // RR,LL閾値
+                int thresholdRR = (sensorMaxRR - sensorMinRR) * Judg_percent;                                      // RR閾値
+                int thresholdLL = (sensorMaxLL - sensorMinLL) * Judg_percent;                                      // LL閾値
                 int thresholdU = (((sensorMaxUR - sensorMinUR) + (sensorMaxUL - sensorMinUL)) / 2) * Judg_percent; // UR,UL閾値
                 // int thresholdUL = (sensorMaxUL - sensorMinUL) * Judg_percent; // UL閾値
                 int threshold_BK = (sensorMax - sensorMin) * Judg_BK_percent; // UR,UL閾値
 
                 thrSensUR = thresholdU;
-                thrSensRR = thresholdRL;
+                thrSensRR = thresholdRR;
                 thrSensCR = threshold;
                 thrSensCC = threshold;
                 thrSensCL = threshold;
-                thrSensLL = thresholdRL;
+                thrSensLL = thresholdLL;
                 thrSensUL = thresholdU;
                 thrSensBK = threshold_BK;
 
@@ -791,9 +793,9 @@ void loop()
                 LcdPosition(0, 0);
                 LcdPrintf("case 11");
                 // iAngle0 = getServoAngle(); /* 0度の位置記憶 */
+                SLOPE_flag;
                 pattern = 11;
                 cnt1 = 0;
-                // saveIndex = 0;
                 saveFlag = true; /* データ保存開始               */
                 check_sen_cnt = 0;
                 check_enc_cnt = 0;
@@ -849,12 +851,17 @@ void loop()
             {
                 PDtrace_Control(i, data_buff[TRG_SPEED_ADDR]);
             }
+
+            if(lEncoderTotal - lEncoderBuff >= 5000 && !SLOPE_flag){
+                SLOPE_flag = true;
+            }
             break;
 
         case 50:                    // 坂
             servoPwmOut(iServoPwm); // ライントレース制御
             i = getServoAngle();    // ステアリング角度取得
             iSetAngle = 0;
+            SLOPE_flag = false;
             PDtrace_Control(i, data_buff[SLOPE_SPEED_ADDR]);
 
             if (lEncoderTotal - lEncoderBuff >= 2000 /*|| slopeCheck()*/)
@@ -1537,7 +1544,7 @@ void loop()
         case 166: // 最内センサ　黒反応後の処理（大カウンター）　最内センサ　白反応時待ち
             if (laneDirection == 'L')
             {                                                            // レーン方向　左
-                iSetAngle = -LANE_ANGLE_L; /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
+                iSetAngle = -(LANE_ANGLE_L - 40); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
                 servoPwmOut(iServoPwm2);                                 // 2角度制御 3:割込制御無
                 motor_f(90, 80);                                         // 前 （左,右）
                 motor_r(90, 0);                                          // 後（左,右)
@@ -1552,7 +1559,7 @@ void loop()
             }
             else if (laneDirection == 'R')
             {                                                           // レーン方向　右　カウンター処理
-                iSetAngle = LANE_ANGLE_R; /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
+                iSetAngle = (LANE_ANGLE_L - 40); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
                 servoPwmOut(iServoPwm2);                                // 2角度制御 3:割込制御無
                 motor_f(80, 90);                                        // 前 （左,右）
                 motor_r(0, 90);                                         // 後（左,右)
@@ -1612,256 +1619,6 @@ void loop()
             }
             break;
 
-            /************************************************************************/
-            /* 	坂モード処理	case 191                                        */
-            /************************************************************************/
-            //====================上り==========================//
-        case 191: // 再チェック
-            servoPwmOut(iServoPwm);
-            motor_f(100, 100); // 前（左,右）
-            motor_r(100, 100); // 後（左,右）
-
-            if (cnt1 >= 15)
-            { // 15ms
-                if (SLOPE_ANGLE > SLOPE_UP_START - 5)
-                { // 上るくん
-                    pattern = 192;
-                    temp = data_buff[PROP_GAIN_ADDR]; // 比例ゲイン
-                    data_buff[PROP_GAIN_ADDR] = 3;    // 比例ゲインダウン
-                    lEncoderBuff = lEncoderTotal;     // 1500ct程度
-                    cnt1 = 0;
-                }
-                else
-                { // 誤検出時
-                    pattern = 11;
-                }
-            }
-            break;
-
-        case 192: // 車体を少し安定させる
-            servoPwmOut(iServoPwm);
-            motor_f(100, 100); // 前（左,右）
-            motor_r(1, 1);     // 後（左,右）
-
-            if (cnt1 >= 40)
-            { // 40ms
-                pattern = 194;
-            }
-            break;
-
-        case 194: // 上り坂の4分の3くらいまではSLOPE_SPEEDで走行
-            servoPwmOut(iServoPwm);
-            if (iEncoder >= SLOPE_UP_SPEED + 3)
-            {
-                motor_f(-10, -10); // 前 (左,右)
-                motor_r(-10, -10); // 後 (左,右)
-            }
-            else if (iEncoder >= SLOPE_UP_SPEED)
-            {
-                motor_f(1, 1);
-                motor_r(1, 1);
-            }
-            else
-            {
-                motor_f(92, 92);
-                motor_r(92, 92);
-            }
-
-            if (cnt2 < 300)
-            {
-                CPU_LED_2 = ON;
-            }
-            else
-            {
-                CPU_LED_2 = OFF;
-                if (cnt2 > 600)
-                {
-                    cnt2 = 0;
-                }
-            }
-
-            if (lEncoderTotal - lEncoderBuff >= 1500)
-            { // 3/4(1000mm程度)
-                pattern = 196;
-                lEncoderBuff = lEncoderTotal; // 1500ct程度
-                cnt1 = 0;
-            }
-            break;
-
-        case 196:
-            servoPwmOut(iServoPwm);
-            motor_f(1, 1);     // 前（左,右）
-            motor_r(-30, -30); // 後（左,右）
-            if (lEncoderTotal - lEncoderBuff >= 300)
-            { // 200mm程度
-                pattern = 198;
-                lEncoderBuff = lEncoderTotal; // 1500ct程度
-                cnt1 = 0;
-            }
-            if (cnt2 < 200)
-            {
-                CPU_LED_2 = ON;
-            }
-            else
-            {
-                CPU_LED_2 = OFF;
-                if (cnt2 > 400)
-                {
-                    cnt2 = 0;
-                }
-            }
-            break;
-
-        case 198:
-            CPU_LED_2 = ON;
-            servoPwmOut(iServoPwm);
-            if (iEncoder >= SLOPE_UP_SPEED - 10)
-            {                      // 3.0m/s程度
-                motor_f(1, 1);     // 前 (左,右)
-                motor_r(-30, -30); // 後 (左,右)
-            }
-            else
-            {
-                motor_f(1, 1);   // 前 (左,右)
-                motor_r(30, 30); // 後 (左,右)
-            }
-            if (SLOPE_ANGLE <= SLOPE_UP_FIN + 20)
-            { // 坂終わり判定登り
-                pattern = 200;
-            }
-            break;
-
-        case 200:
-            servoPwmOut(iServoPwm);
-            motor_f(1, 1);     // 前（左,右）
-            motor_r(-30, -30); // 後（左,右）
-            if (lEncoderTotal - lEncoderBuff >= 300)
-            { // 200mm程度
-                pattern = 202;
-                cnt1 = 0;
-            }
-            break;
-
-        case 202:
-            servoPwmOut(iServoPwm);
-            slopeTotalCount = 1;
-            data_buff[PROP_GAIN_ADDR] = temp;
-            slopeFinTime = 0; // 坂下りご検出防止タイマー
-            pattern = 11;
-
-            /*while(1){//確認用
-            motor_f(0,0);	//前 (左,右)
-            motor_r(0,0);	//後 (左,右)
-          }
-          */
-            break;
-
-            //====================上り終了======================//
-            //====================下り==========================//
-        case 211: // 検出再確認(不要？とりあえず)
-            servoPwmOut(iServoPwm);
-            motor_f(70, 70); // 前（左,右）
-            motor_r(70, 70); // 後（左,右）
-
-            if (cnt1 >= 15)
-            { // 15ms
-                if (SLOPE_ANGLE < SLOPE_DOWN_START + 5)
-                { // 下るくん
-                    pattern = 212;
-                    temp = data_buff[PROP_GAIN_ADDR]; // 比例ゲイン
-                    data_buff[PROP_GAIN_ADDR] = 3;    // 比例ゲインダウン
-                    lEncoderBuff = lEncoderTotal;
-                    cnt1 = 0;
-                }
-                else
-                { // 誤検出時
-                    pattern = 11;
-                }
-            }
-            break;
-
-        case 212: // センサーバーを落とすためのブレーキ
-            servoPwmOut(iServoPwm);
-            motor_f(0, 0);     // 前（左,右）
-            motor_r(-60, -60); // 後（左,右）
-            if (lEncoderTotal - lEncoderBuff >= 300)
-            { // 200mm程度
-                lEncoderBuff = lEncoderTotal;
-                pattern = 214;
-            }
-            break;
-
-        case 214: // 安定走行を目指し前輪で走行
-            servoPwmOut(iServoPwm);
-            motor_f(70, 70); // 前（左,右）
-            motor_r(30, 30); // 後（左,右）
-            if (lEncoderTotal - lEncoderBuff >= 450)
-            { // 300mm程度
-                lEncoderBuff = lEncoderTotal;
-                pattern = 216;
-            }
-            break;
-
-        case 216:
-            servoPwmOut(iServoPwm);
-            if (iEncoder >= SLOPE_DOWN_SPEED + 3)
-            {
-                motor_f(-10, -10); // 前 (左,右)
-                motor_r(-10, -10); // 後 (左,右)
-            }
-            else if (iEncoder >= SLOPE_DOWN_SPEED)
-            {
-                motor_f(1, 1);
-                motor_r(1, 1);
-            }
-            else
-            {
-                motor_f(85, 85);
-                motor_r(85, 85);
-            }
-
-            if (SLOPE_ANGLE > SLOPE_DOWN_FIN - 5)
-            { // 下り終わり検出
-                lEncoderBuff = lEncoderTotal;
-                pattern = 218;
-            }
-            break;
-
-        case 218: // 車体安定のためのブレーキ（センサーバーを安定させる）
-            servoPwmOut(iServoPwm);
-            motor_f(-30, -30); // 前（左,右）
-            motor_r(-30, -30); // 後（左,右）
-            if (lEncoderTotal - lEncoderBuff >= 151)
-            { // 50mm
-                lEncoderBuff = lEncoderTotal;
-                pattern = 220;
-            }
-            break;
-
-        case 220: // 車体安定のためのフリー
-            servoPwmOut(iServoPwm);
-            motor_f(1, 1); // 前（左,右）
-            motor_r(1, 1); // 後（左,右）
-            if (lEncoderTotal - lEncoderBuff >= 151)
-            { // 50mm
-                pattern = 222;
-            }
-            break;
-
-        case 222:
-            servoPwmOut(iServoPwm);
-            slopeTotalCount = 2;
-            data_buff[PROP_GAIN_ADDR] = temp;
-            pattern = 11;
-            /*
-          while(1){
-            motor_f(0,0);	//前 (左,右)
-            motor_r(0,0);	//後 (左,右)
-          }
-          */
-            break;
-
-            //====================下り終了======================//
         case 231:
             /* 停止処理 */
             servoPwmOut(iServoPwm);
@@ -2146,7 +1903,7 @@ void timerCallback(timer_callback_args_t __attribute((unused)) * p_args)
             break;
 
         case 9:
-            if (pattern == 11 && abs(getServoAngle()) < 10)
+            if (pattern == 11 && abs(getServoAngle()) < 8)
             {
                 if (which_slope)
                 {
@@ -3484,7 +3241,7 @@ int angleStreatCheck(int i, int jide_angle)
     return 0;
 }
 
-int slopeCheck()
+int slopeCheck()//坂検知
 {
     int total_slope = 0;
 
@@ -3503,7 +3260,7 @@ int slopeCheck()
         }
     }
 
-    if (anaSensCC_diff - (total_slope / 5) > 500)
+    if (anaSensCC_diff - (total_slope / 5) > SLOPE_UP_START)
     {
         return 1;
     }

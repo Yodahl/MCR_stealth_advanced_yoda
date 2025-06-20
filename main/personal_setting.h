@@ -283,8 +283,8 @@
 /*
  *	レーン角度
  */
-#define LANE_ANGLE_R 110 // 右レーンアングル 95
-#define LANE_ANGLE_L 110 // 左レーンアングル 95
+#define LANE_ANGLE_R 120 // 右レーンアングル 95
+#define LANE_ANGLE_L 120 // 左レーンアングル 95
 /*
  *	クランク角度
  */
@@ -310,11 +310,7 @@
 /*
  *	坂関連
  */
-#define SLOPE_CENTER 224     // 坂センサのセンター値
-#define SLOPE_UP_START 250   // 上り開始判定
-#define SLOPE_UP_FIN 192     // 上り終わり判定
-#define SLOPE_DOWN_START 190 // 下りはじめ判定
-#define SLOPE_DOWN_FIN 245   // 下り終わり判定
+#define SLOPE_UP_START 500   // 上り開始判定
 
 /*
  *	内臓フラッシュ関連
