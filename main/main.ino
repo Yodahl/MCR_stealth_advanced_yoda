@@ -196,7 +196,7 @@ volatile int8_t crankMode = 0;        // クランク判定   1:クランクモ�
 volatile int8_t crankDirection = 'N'; // クランクの方向 R:右 L:左
 volatile int8_t laneMode = 0;         // レーン判定
 volatile int8_t laneDirection = 'N';  // レーンの方向 R:右 L:左
-volatile int8_t slopeTotalCount = 0;  // 坂通過数（２度通過防止）
+volatile int8_t slopeTotalCount = 0;  // 坂通過数
 
 volatile long slopeFinTime = 0;  // 登坂後の安定待ち
 volatile int laneClearTime = 0;  // レーン後のブレーキ防止
@@ -211,11 +211,10 @@ volatile int8_t linerrcount = 0;
 volatile int8_t sensLLon = OFF;
 volatile int8_t sensRRon = OFF;
 
-volatile bool SLOPE_flag = true;
+volatile bool SLOPE_flag = false;
 
 volatile bool START_flag = false;
 volatile bool Run_end = false;
-
 
 /*
  *	エンコーダ関連
@@ -265,6 +264,7 @@ int16_t Slope_thr[5];   // サカ検知用
 int16_t Slope_thr_1[5]; // サカ検知用
 volatile int8_t slope_thr_cnt = 0;
 volatile int8_t slope_thr_cnt_1 = 0;
+volatile int8_t slope_start_cnt = 0;
 
 /*
  *	LCD関連
@@ -449,7 +449,7 @@ void loop()
                 cnt1 = 0;
                 crankMode = 1;
                 pattern = 101;
-                SLOPE_flag = true;
+                // SLOPE_flag = true;
                 lEncoderBuff = lEncoderTotal;
             }
 
@@ -459,7 +459,7 @@ void loop()
                 cnt1 = 0;
                 laneMode = 1;
                 pattern = 151;
-                SLOPE_flag = true;
+                // SLOPE_flag = true;
                 laneDirection = 'L';
                 lEncoderBuff = lEncoderTotal;
             }
@@ -469,12 +469,12 @@ void loop()
                 cnt1 = 0;
                 laneMode = 1;
                 pattern = 151;
-                SLOPE_flag = true;
+                // SLOPE_flag = true;
                 laneDirection = 'R';
                 lEncoderBuff = lEncoderTotal;
             }
             // 登坂検出
-            if (slopeCheck() && abs(getServoAngle()) < 8 && SLOPE_flag && !check_leftline() && !check_rightline())
+            if (slopeCheck() && abs(getServoAngle()) < 8 && SLOPE_flag && !check_leftline() && !check_rightline() && !check_crossline())
             {
                 // 坂走行処理へ	のぼるくん
                 pattern = 50;
@@ -543,7 +543,7 @@ void loop()
             static int step = 1;       // サーボの移動
             static int cycleCount = 0; // 首を振った回数
 
-            static float Judg_percent = 0.42;    // 閾値パーセント  0.4
+            static float Judg_percent = 0.42;   // 閾値パーセント  0.4
             static float Judg_BK_percent = 0.2; // 閾値パーセント
 
             // iAngle0 = getServoAngle(); /* 0度の位置記憶 */
@@ -628,7 +628,7 @@ void loop()
             else
             { // 片方向2回ずつ振る計4回
                 // 閾値計算
-                int threshold = (sensorMax - sensorMin) * Judg_percent;                                             // CC閾値
+                int threshold = (sensorMax - sensorMin) * Judg_percent; // CC閾値
                 // int thresholdRL = (((sensorMaxRR - sensorMinRR) + (sensorMaxLL - sensorMinLL)) / 2) * Judg_percent; // RR,LL閾値
                 int thresholdRR = (sensorMaxRR - sensorMinRR) * Judg_percent;                                      // RR閾値
                 int thresholdLL = (sensorMaxLL - sensorMinLL) * Judg_percent;                                      // LL閾値
@@ -852,7 +852,13 @@ void loop()
                 PDtrace_Control(i, data_buff[TRG_SPEED_ADDR]);
             }
 
-            if(lEncoderTotal - lEncoderBuff >= 5000 && !SLOPE_flag){
+            if (lEncoderTotal - lEncoderBuff >= 5000 && !SLOPE_flag && slopeTotalCount != 0)
+            {
+                SLOPE_flag = true;
+            }
+
+            if (slope_start_cnt == 10 && slopeTotalCount == 0)
+            {
                 SLOPE_flag = true;
             }
             break;
@@ -1543,11 +1549,11 @@ void loop()
 
         case 166: // 最内センサ　黒反応後の処理（大カウンター）　最内センサ　白反応時待ち
             if (laneDirection == 'L')
-            {                                                            // レーン方向　左
+            {                                                                   // レーン方向　左
                 iSetAngle = -(LANE_ANGLE_L - 40); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
-                servoPwmOut(iServoPwm2);                                 // 2角度制御 3:割込制御無
-                motor_f(90, 80);                                         // 前 （左,右）
-                motor_r(90, 0);                                          // 後（左,右)
+                servoPwmOut(iServoPwm2);                                        // 2角度制御 3:割込制御無
+                motor_f(90, 80);                                                // 前 （左,右）
+                motor_r(90, 0);                                                 // 後（左,右)
                 if (sensRRon == ON && cnt1 >= 10)
                 {
                     pattern = 168;
@@ -1558,11 +1564,11 @@ void loop()
                 }
             }
             else if (laneDirection == 'R')
-            {                                                           // レーン方向　右　カウンター処理
+            {                                                                  // レーン方向　右　カウンター処理
                 iSetAngle = (LANE_ANGLE_L - 40); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
-                servoPwmOut(iServoPwm2);                                // 2角度制御 3:割込制御無
-                motor_f(80, 90);                                        // 前 （左,右）
-                motor_r(0, 90);                                         // 後（左,右)
+                servoPwmOut(iServoPwm2);                                       // 2角度制御 3:割込制御無
+                motor_f(80, 90);                                               // 前 （左,右）
+                motor_r(0, 90);                                                // 後（左,右)
                 if (sensLLon == ON && cnt1 >= 10)
                 {
                     pattern = 168;
@@ -1905,6 +1911,10 @@ void timerCallback(timer_callback_args_t __attribute((unused)) * p_args)
         case 9:
             if (pattern == 11 && abs(getServoAngle()) < 8)
             {
+                if (slope_start_cnt <= 10)
+                {
+                    slope_start_cnt++;
+                }
                 if (which_slope)
                 {
                     Slope_thr[slope_thr_cnt] = anaSensCC_diff;
@@ -2386,54 +2396,22 @@ int check_leftline(void)
 int getAnalogSensor(void)
 {
     int ret;
+    if (pattern == 50)
+    {
+        ret = (anaSensUL_diff) - (anaSensUR_diff); /* アナログセンサ情報取得    左大：＋ 　右大：-　  */
+    }
+    else
+    {
+        ret = (anaSensCL_diff) - (anaSensCR_diff); /* アナログセンサ情報取得    左大：＋ 　右大：-　  */
+    }
 
-    //   ret = ad1 - ad0; /* アナログセンサ情報取得       */
-    // ret = (anaSensCL_diff >> 2) - (anaSensCR_diff >> 2); /* アナログセンサ情報取得    左大：＋ 　右大：-　  */
-    ret = (anaSensCL_diff) - (anaSensCR_diff); /* アナログセンサ情報取得    左大：＋ 　右大：-　  */
-
-    // 100程度が最大
-    // if (ret < 0)
-    // {
-    //   ret = -curves18[abs(ret)];
-    // }
-    // else
-    // {
-    //   ret = curves18[abs(ret)];
-    // }
-
-    // if (((sensLLon == ON && digiSensCC == ON) || (sensRRon == ON && digiSensCC == ON)) && pattern != 3)
-    // if (((digiSensCR == ON && digiSensCC == ON) || (digiSensCL == ON && digiSensCC == ON)) && pattern != 3)
-    // if ((digiSensLL == OFF && digiSensCC == OFF && digiSensRR == OFF) || (digiSensLL == ON && digiSensCC == ON && digiSensRR == ON))
-    // {
-    //   ret = 0;
-    // }
-
-    // if (!crankMode) {
-    /* クランクモードでなければ補正処理 */
-    // courceOut():0のときは、アナログセンサによるトレース
-    // courceOut();
-    // switch (cource) // ここ要る？
-    // {
-
-    // case 1:
-    // case 2:
-    // case 3:
-    //   ret = -200;
-    //   break;
-
-    // case -1:
-    // case -2:
-    // case -3:
-    //   ret = 200;
-    //   break;
-    // }
     return ret;
 }
 
 /************************************************************************/
 /* コース外れ値取得関数 */
 /* 引数　 無し */
-/* 戻り値 無し */
+/* 戻り値 無し *///OJICHAN
 /*　注意：　変数cource＝グローバル変数
 /************************************************************************/
 void courceOut(void)
@@ -3241,7 +3219,7 @@ int angleStreatCheck(int i, int jide_angle)
     return 0;
 }
 
-int slopeCheck()//坂検知
+int slopeCheck() // 坂検知
 {
     int total_slope = 0;
 
@@ -3262,6 +3240,7 @@ int slopeCheck()//坂検知
 
     if (anaSensCC_diff - (total_slope / 5) > SLOPE_UP_START)
     {
+        slopeTotalCount++;
         return 1;
     }
     else
@@ -3397,7 +3376,7 @@ void LOG_rec(void)
         // isWriting = true;
     }
 
-    // 一定数溜まったら書き込みトリガー
+    // 一定数溜まったら書き込み
     // if (logCt >= LOG_BUFF_SIZE && !isWriting) {
     //   isWriting = true;
     //   logCt = 0;
