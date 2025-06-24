@@ -63,7 +63,7 @@ void writeDataFlashParameter(void);
 int lcdProcess(void);
 int slopeCheck(void);
 
-void courceOut(void);                        // コースハズレ特定関数
+// void courceOut(void);                        // コースハズレ特定関数
 void mtTest(void);                           // モータテスト
 int angleStreatCheck(int i, int jide_angle); // ブレーキ時のノイズ対策
 
@@ -649,8 +649,8 @@ void loop()
 
                 if ((getServoAngle() == 0))
                 {
-                    pattern = 4; // 手押し 4
-                    // pattern = 3; // STARTbar
+                    // pattern = 8; // 手押し
+                    pattern = 3; // STARTbar
                     // pattern = 1;
                     START_flag = false;
                     cnt1 = 0;
@@ -669,85 +669,121 @@ void loop()
              * スタートバー開待ち
              */
         case 3:
-            servoPwmOut(iServoPwm / 2);
+            servoPwmOut(iServoPwm / 3);
             if (pushsw_get() && cnt2 > 300)
             {
-                START_flag = true;
+                if (digiSensRR == ON) // キャリブレーション失敗
+                    pattern = 1;      // キャリブレーションやり直し
+                else
+                {
+                    START_flag = true;
+                }
             }
 
-            // if ((anaSensRR_diff > 10000) && START_flag)
-            if (digiSensRR == ON && START_flag)
+            if (START_flag)
             {
-                // iAngle0 = getServoAngle(); /* 0度の位置記憶 */
+                if (digiSensRR == ON)
+                {
+                    pattern = 4;
+                }
+                else
+                {
+                    motor_f(20, 20);
+                }
+            }
+            break;
 
-                // iAngle0 = VR_CENTER; // センター値固定
+        case 4:
+            // servoPwmOut(iServoPwm / 2);
+            if (digiSensLL == OFF && digiSensRR == OFF)
+            {
+                motor_f(0, 0);
+                pattern = 5;
+            }
+            else
+            {
+                motor_f(20, 20);
+            }
+            break;
+
+        case 5:
+            // servoPwmOut(iServoPwm / 2);
+            motor_f(0, 0);
+            // if ((anaSensRR_diff > 10000) && START_flag)
+            if (sensRRon == ON && iEncoder == 0)
+            {
                 CPU_LED_2 = OFF;
                 cnt1 = 0;
                 // saveIndex = 0;
-                // saveFlag = true; //pattern :5 で行う　/* データ保存開始               */
+                // saveFlag = true; //pattern :5 で行う　/* データ保存開始 */
                 check_sen_cnt = 0;
                 check_enc_cnt = 0;
                 check_ana_cnt = 0;
                 // cnt1 = 0;
-                pattern = 5;
+                pattern = 9;
                 break;
             }
-            else
-            {
-                if (cnt1 < 300)
-                {
-                    CPU_LED_2 = ON;
-                    R_LED = ON;
-                    L_LED = OFF;
-                }
-                else
-                {
-                    CPU_LED_2 = OFF;
-                    R_LED = OFF;
-                    L_LED = ON;
-                    if (cnt1 > 600)
-                    {
-                        cnt1 = 0;
-                    }
-                }
-            }
+            // else
+            // {
+            //     if (cnt1 < 800)
+            //     {
+            //         CPU_LED_2 = ON;
+            //         R_LED = ON;
+            //         L_LED = OFF;
+            //     }
+            //     else
+            //     {
+            //         CPU_LED_2 = OFF;
+            //         R_LED = OFF;
+            //         L_LED = ON;
+            //         if (cnt1 > 1600)
+            //         {
+            //             cnt1 = 0;
+            //         }
+            //     }
+            // }
             break;
 
         /*
          * スタートSW待ち
          */
-        case 4:
-            servoPwmOut(iServoPwm / 2);
+        case 8:
+            servoPwmOut(iServoPwm / 3);
             // lcdProcess();
             if (pushsw_get() == ON && cnt2 > 300)
             {
-                // iAngle0 = getServoAngle(); /* 0度の位置記憶 */
-                // iAngle0 = VR_CENTER; // センター値固定
-                CPU_LED_2 = OFF;
-                cnt1 = 0;
-                // saveIndex = 0;
-                // saveFlag = true; //pattern :5 で行う　/* データ保存開始               */
-                check_sen_cnt = 0;
-                check_enc_cnt = 0;
-                check_ana_cnt = 0;
-                pattern = 5;
-                delay(100);
-                while (pushsw_get() == ON)
+                if (digiSensRR == ON) // キャリブレーション失敗
+                    pattern = 1;      // キャリブレーションやり直し
+                else
                 {
-                    if (cnt1 < 100)
+                    // iAngle0 = getServoAngle(); /* 0度の位置記憶 */
+                    // iAngle0 = VR_CENTER; // センター値固定
+                    CPU_LED_2 = OFF;
+                    cnt1 = 0;
+                    // saveIndex = 0;
+                    // saveFlag = true; //pattern :5 で行う　/* データ保存開始               */
+                    check_sen_cnt = 0;
+                    check_enc_cnt = 0;
+                    check_ana_cnt = 0;
+                    pattern = 9;
+                    delay(100);
+                    while (pushsw_get() == ON)
                     {
-                        CPU_LED_2 = ON;
-                        R_LED = ON;
-                        L_LED = OFF;
-                    }
-                    else
-                    {
-                        CPU_LED_2 = OFF;
-                        R_LED = OFF;
-                        L_LED = ON;
-                        if (cnt1 > 200)
+                        if (cnt1 < 100)
                         {
-                            cnt1 = 0;
+                            CPU_LED_2 = ON;
+                            R_LED = ON;
+                            L_LED = OFF;
+                        }
+                        else
+                        {
+                            CPU_LED_2 = OFF;
+                            R_LED = OFF;
+                            L_LED = ON;
+                            if (cnt1 > 200)
+                            {
+                                cnt1 = 0;
+                            }
                         }
                     }
                 }
@@ -770,7 +806,9 @@ void loop()
             }
             break;
 
-        case 5:
+        case 9:
+            motor_f(0, 0);
+            motor_r(0, 0);
             if (cnt2 < 100)
             {
                 CPU_LED_2 = ON;
@@ -793,14 +831,14 @@ void loop()
                 LcdPosition(0, 0);
                 LcdPrintf("case 11");
                 // iAngle0 = getServoAngle(); /* 0度の位置記憶 */
-                SLOPE_flag;
+                SLOPE_flag = false;
                 pattern = 11;
                 cnt1 = 0;
                 saveFlag = true; /* データ保存開始               */
                 check_sen_cnt = 0;
                 check_enc_cnt = 0;
             }
-            servoPwmOut(iServoPwm / 2); // ライントレース制御
+            servoPwmOut(iServoPwm / 3); // ライントレース制御
             break;
 
             /*
@@ -1550,7 +1588,7 @@ void loop()
         case 166: // 最内センサ　黒反応後の処理（大カウンター）　最内センサ　白反応時待ち
             if (laneDirection == 'L')
             {                                                                   // レーン方向　左
-                iSetAngle = -(LANE_ANGLE_L - 40); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
+                iSetAngle = -(LANE_ANGLE_L - 50); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
                 servoPwmOut(iServoPwm2);                                        // 2角度制御 3:割込制御無
                 motor_f(90, 80);                                                // 前 （左,右）
                 motor_r(90, 0);                                                 // 後（左,右)
@@ -1565,7 +1603,7 @@ void loop()
             }
             else if (laneDirection == 'R')
             {                                                                  // レーン方向　右　カウンター処理
-                iSetAngle = (LANE_ANGLE_L - 40); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
+                iSetAngle = (LANE_ANGLE_L - 50); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
                 servoPwmOut(iServoPwm2);                                       // 2角度制御 3:割込制御無
                 motor_f(80, 90);                                               // 前 （左,右）
                 motor_r(0, 90);                                                // 後（左,右)
@@ -2396,13 +2434,13 @@ int check_leftline(void)
 int getAnalogSensor(void)
 {
     int ret;
-    if (pattern == 50)
+    if (pattern == 50 || pattern < 8)
     {
         ret = (anaSensUL_diff) - (anaSensUR_diff); /* アナログセンサ情報取得    左大：＋ 　右大：-　  */
     }
     else
     {
-        ret = (anaSensCL_diff) - (anaSensCR_diff); /* アナログセンサ情報取得    左大：＋ 　右大：-　  */
+    ret = (anaSensCL_diff) - (anaSensCR_diff); /* アナログセンサ情報取得    左大：＋ 　右大：-　  */
     }
 
     return ret;
@@ -2411,77 +2449,78 @@ int getAnalogSensor(void)
 /************************************************************************/
 /* コース外れ値取得関数 */
 /* 引数　 無し */
-/* 戻り値 無し *///OJICHAN
+/* 戻り値 無し */ //
 /*　注意：　変数cource＝グローバル変数
 /************************************************************************/
-void courceOut(void)
-{
-    if (digiSensCC == ON)
-    { /* Cセンサ白線 */
-        switch (cource)
-        {
-        case 1:
-        case 2:
-        case -1:
-        case -2:
-            cource = 0; /* コース上 */
-            break;
-        }
-    }
-    else if (anaSensCL_diff > thrSensCL)
-    { /* Lセンサ白線 */
-        switch (cource)
-        {
-        case 0:
-        case -2:
-            cource = -1; /* コース外れR1 */
-            break;
-        }
-    }
-    else if (anaSensCR_diff > thrSensCR)
-    { /* Rセンサ白線 */
-        switch (cource)
-        {
-        case 0:
-        case 2:
-            cource = 1; /* コース外れL1 */
-            break;
-        }
-    }
-    else if (digiSensLL == ON)
-    { /* LLセンサ白線 */
-        switch (cource)
-        {
-        case -1:
-        case -3:
-            cource = -2; /* コース外れR2 */
-            break;
-        }
-    }
-    else if (digiSensRR == ON)
-    { /* RRセンサ白線 */
-        switch (cource)
-        {
-        case 1:
-        case 3:
-            cource = 2; /* コース外れL2 */
-            break;
-        }
-    }
-    // else if (digiSensRR == OFF && digiSensCC == OFF && digiSensLL == OFF && anaSensCR_diff < thrSensCR && anaSensCL_diff < thrSensCL)
-    // { /* 全てのセンサ黒 */
-    //   switch (cource)
-    //   {
-    //   case 2:
-    //     cource = 3; /* コース外れL3 */
-    //     break;
-    //   case -2:
-    //     cource = -3; /* コース外れR3 */
-    //     break;
-    //   }
-    // }
-    //  return cource;
-}
+
+// void courceOut(void)
+// {
+//     if (digiSensCC == ON)
+//     { /* Cセンサ白線 */
+//         switch (cource)
+//         {
+//         case 1:
+//         case 2:
+//         case -1:
+//         case -2:
+//             cource = 0; /* コース上 */
+//             break;
+//         }
+//     }
+//     else if (anaSensCL_diff > thrSensCL)
+//     { /* Lセンサ白線 */
+//         switch (cource)
+//         {
+//         case 0:
+//         case -2:
+//             cource = -1; /* コース外れR1 */
+//             break;
+//         }
+//     }
+//     else if (anaSensCR_diff > thrSensCR)
+//     { /* Rセンサ白線 */
+//         switch (cource)
+//         {
+//         case 0:
+//         case 2:
+//             cource = 1; /* コース外れL1 */
+//             break;
+//         }
+//     }
+//     else if (digiSensLL == ON)
+//     { /* LLセンサ白線 */
+//         switch (cource)
+//         {
+//         case -1:
+//         case -3:
+//             cource = -2; /* コース外れR2 */
+//             break;
+//         }
+//     }
+//     else if (digiSensRR == ON)
+//     { /* RRセンサ白線 */
+//         switch (cource)
+//         {
+//         case 1:
+//         case 3:
+//             cource = 2; /* コース外れL2 */
+//             break;
+//         }
+//     }
+//     // else if (digiSensRR == OFF && digiSensCC == OFF && digiSensLL == OFF && anaSensCR_diff < thrSensCR && anaSensCL_diff < thrSensCL)
+//     // { /* 全てのセンサ黒 */
+//     //   switch (cource)
+//     //   {
+//     //   case 2:
+//     //     cource = 3; /* コース外れL3 */
+//     //     break;
+//     //   case -2:
+//     //     cource = -3; /* コース外れR3 */
+//     //     break;
+//     //   }
+//     // }
+//     //  return cource;
+// }
 
 /************************************************************************/
 /* サーボモータ制御  トレース用                                            */
@@ -2808,7 +2847,7 @@ int lcdProcess(void)
         LcdPosition(0, 0);
         LcdPrintf("04 Trace kd =%03d", i);
         LcdPosition(0, 1);
-        courceOut();
+        // courceOut();
         LcdPrintf("courceOut=%2d       ", cource);
         break;
 
