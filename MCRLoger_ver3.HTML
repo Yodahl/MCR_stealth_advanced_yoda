@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>MCRLoger</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+    }
+    
+    .header {
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    
+    .controls {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+    }
+    
+    .file-info {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .stats {
+      background-color: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+      display: none;
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+    }
+    
+    .stat-item {
+      text-align: center;
+      padding: 8px;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+    }
+    
+    .stat-label {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+    
+    .stat-value {
+      font-size: 18px;
+      font-weight: bold;
+      color: #333;
+    }
+    
+    .table-container {
+      max-height: 60vh;
+      overflow: auto;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background-color: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: monospace;
+    }
+    
+    th, td {
+      border: 1px solid #ddd;
+      padding: 6px 8px;
+      text-align: center;
+      min-width: 70px;
+    }
+    
+    th {
+      background-color: #4a5568;
+      color: white;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      font-weight: bold;
+    }
+    
+    td {
+      background-color: white;
+    }
+    
+    tr:nth-child(even) td {
+      background-color: #f8f9fa;
+    }
+    
+    tr:hover td {
+      background-color: #e3f2fd;
+    }
+    
+    .highlight {
+      background-color: #ffeb3b !important;
+    }
+    
+    .sensor-on {
+      color: #4caf50;
+      font-weight: bold;
+    }
+    
+    .sensor-off {
+      color: #f44336;
+    }
+    
+    .filter-input {
+      padding: 6px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s;
+    }
+    
+    .btn-primary {
+      background-color: #2196f3;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background-color: #1976d2;
+    }
+    
+    .btn-secondary {
+      background-color: #6c757d;
+      color: white;
+    }
+    
+    .btn-secondary:hover {
+      background-color: #545b62;
+    }
+    
+    .jump-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>MCRLoger</h2>
+    
+    <div class="controls">
+      <input type="file" id="fileInput" accept=".txt,.log,.csv">
+      <input type="text" id="searchInput" class="filter-input" placeholder="検索 (行番号, 値, など)" style="display:none;">
+      <input type="number" id="jumpInput" class="filter-input" placeholder="行番号" min="0" style="display:none;">
+      <button id="jumpBtn" class="btn btn-primary" style="display:none;">ジャンプ</button>
+      <button id="exportBtn" class="btn btn-secondary" style="display:none;">CSV出力</button>
+    </div>
+    
+    <div class="file-info" id="fileInfo"></div>
+  </div>
+  
+  <div class="stats" id="statsPanel">
+    <!-- <h3>統計情報</h3> -->
+    <div class="stats-grid" id="statsGrid"></div>
+  </div>
+  
+  <div class="table-container" id="tableContainer" style="display:none;">
+    <table id="logTable"></table>
+  </div>
+
+  <script>
+    const columnNames = [
+      "LL", "CC", "RR", 
+      "エンコーダ", "pattern", "減算距離", "サーボ角度", "指定角度",
+      "アナログL", "アナログC", "アナログR", "PWMステア",
+      "PWM FR", "PWM FL", "PWM RR", "PWM RL", "未使用1", "未使用2"
+    ];
+    
+    let allRows = [];
+    let filteredRows = [];
+    
+    function processLogFile(lines) {
+      let lineNo = 0;
+      lines.forEach(line => {
+        if (line.includes('fin')) {
+          const rawValues = [];
+          for (let i = 0; i < 16; i++) {
+            const match = line.match(new RegExp(`d_${i}=\\s*(-?\\d+)`));
+            rawValues.push(match ? parseInt(match[1], 10) : 0);
+          }
+          
+          if (rawValues.length === 16) {
+            const d0 = rawValues[0];
+            const LL = ((d0 >> 2) & 1) ? '●' : '◯';
+            const CC = ((d0 >> 1) & 1) ? '●' : '◯';
+            const RR = ((d0 >> 0) & 1) ? '●' : '◯';
+            
+            allRows.push({
+              no: lineNo++,
+              values: [LL, CC, RR, ...rawValues.slice(1)],
+              rawLine: line
+            });
+          }
+        }
+      });
+    }
+    
+    function processCsvFile(lines) {
+      console.log('Processing CSV file with', lines.length, 'lines');
+      
+      lines.forEach((line, index) => {
+        if (line.trim() === '') return; // 空行をスキップ
+        
+        const cells = line.split(',');
+        console.log(`Line ${index}: ${cells.length} cells`);
+        
+        // 各セルでログデータを探す
+        cells.forEach(cell => {
+          const trimmedCell = cell.trim();
+          if (trimmedCell.includes('fin') && trimmedCell.includes('d_0=')) {
+            console.log('Found log data in cell:', trimmedCell);
+            
+            // ログデータから値を抽出
+            const rawValues = [];
+            for (let i = 0; i < 16; i++) {
+              const match = trimmedCell.match(new RegExp(`d_${i}=\\s*(-?\\d+)`));
+              rawValues.push(match ? parseInt(match[1], 10) : 0);
+            }
+            
+            if (rawValues.length === 16) {
+              const d0 = rawValues[0];
+              const LL = ((d0 >> 2) & 1) ? '●' : '◯';
+              const CC = ((d0 >> 1) & 1) ? '●' : '◯';
+              const RR = ((d0 >> 0) & 1) ? '●' : '◯';
+              
+              allRows.push({
+                no: allRows.length,
+                values: [LL, CC, RR, ...rawValues.slice(1)],
+                rawLine: trimmedCell
+              });
+            }
+          }
+        });
+      });
+      
+      console.log('Processed', allRows.length, 'rows from CSV');
+    }
+    
+    function processStandardCsv(lines) {
+      console.log('Processing standard CSV format');
+      
+      lines.forEach((line, index) => {
+        if (line.trim() === '') return;
+        
+        const cells = line.split(',').map(cell => cell.trim());
+        
+        // ヘッダー行をスキップ
+        if (index === 0 && (cells[0].toLowerCase() === 'no' || isNaN(parseInt(cells[0])))) {
+          console.log('Skipping header:', line);
+          return;
+        }
+        
+        if (cells.length >= 17) { // No + 16列
+          const lineNo = parseInt(cells[0]) || index;
+          const rawValues = cells.slice(1, 17).map(v => {
+            const num = parseInt(v);
+            return isNaN(num) ? 0 : num;
+          });
+          
+          const d0 = rawValues[0];
+          const LL = ((d0 >> 2) & 1) ? '●' : '◯';
+          const CC = ((d0 >> 1) & 1) ? '●' : '◯';
+          const RR = ((d0 >> 0) & 1) ? '●' : '◯';
+          
+          allRows.push({
+            no: lineNo,
+            values: [LL, CC, RR, ...rawValues.slice(1)],
+            rawLine: line
+          });
+        }
+      });
+      
+      console.log('Processed', allRows.length, 'rows from standard CSV');
+    }
+    
+    document.getElementById('fileInput').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      
+      reader.onload = function (event) {
+        const content = event.target.result;
+        const lines = content.split('\n');
+        allRows = [];
+        
+        // ファイル情報表示
+        const fileInfo = document.getElementById('fileInfo');
+        fileInfo.innerHTML = `📁 ${file.name} (${(file.size / 1024).toFixed(1)} KB, ${lines.length} 行)`;
+        
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+        
+        try {
+          // 実際の内容を確認してファイル形式を判別
+          const hasLogFormat = content.includes('fin') && content.includes('d_0=');
+          const hasStandardCsvFormat = lines.some(line => {
+            const cells = line.split(',');
+            return cells.length > 10 && cells[0].match(/^\d+$/) && cells[1].match(/^-?\d+$/);
+          });
+          
+          if (hasLogFormat) {
+            console.log('Detected log format data');
+            if (fileExtension === 'csv') {
+              // CSVファイル内のログデータを処理
+              processCsvFile(lines);
+            } else {
+              // 通常のログファイルを処理
+              processLogFile(lines);
+            }
+          } else if (hasStandardCsvFormat) {
+            console.log('Detected standard CSV format');
+            processStandardCsv(lines);
+          } else {
+            console.log('Unknown format, trying log processing');
+            processLogFile(lines);
+          }
+          
+          if (allRows.length === 0) {
+            fileInfo.innerHTML += '<br>⚠️ データが見つかりませんでした。ファイル形式を確認してください。';
+            console.log('No data found. First few lines:', lines.slice(0, 5));
+          } else {
+            // fileInfo.innerHTML += `<br>✅ ${allRows.length} 行のデータを読み込みました。`;
+          }
+        } catch (error) {
+          console.error('File processing error:', error);
+          fileInfo.innerHTML += '<br>❌ ファイル処理中にエラーが発生しました。';
+        }
+        
+        filteredRows = [...allRows];
+        renderTable();
+        showStats();
+        showControls();
+      };
+      
+      reader.readAsText(file);
+    });
+    
+    function renderTable() {
+      const table = document.getElementById('logTable');
+      table.innerHTML = '';
+      
+      // ヘッダー行
+      const headerRow = document.createElement('tr');
+      headerRow.innerHTML = '<th>No</th>' + columnNames.map(name => `<th>${name}</th>`).join('');
+      table.appendChild(headerRow);
+      
+      // データ行
+      filteredRows.forEach(rowData => {
+        const row = document.createElement('tr');
+        row.innerHTML = `<td>${rowData.no}</td>` + 
+          rowData.values.map((v, i) => {
+            let cellClass = '';
+            if (i === 0 || i === 1 || i === 2) { // LL, CC, RR
+              cellClass = v === '●' ? 'sensor-on' : 'sensor-off';
+            }
+            return `<td class="${cellClass}">${v}</td>`;
+          }).join('');
+        table.appendChild(row);
+      });
+      
+      document.getElementById('tableContainer').style.display = 'block';
+    }
+    
+    function showStats() {
+      const stats = calculateStats();
+      const statsGrid = document.getElementById('statsGrid');
+      
+      statsGrid.innerHTML = Object.entries(stats).map(([key, value]) => `
+        <div class="stat-item">
+          <div class="stat-label">${key}</div>
+          <div class="stat-value">${value}</div>
+        </div>
+      `).join('');
+      
+      document.getElementById('statsPanel').style.display = 'block';
+    }
+    
+    function calculateStats() {
+      if (allRows.length === 0) return {};
+      
+      const stats = {
+        '総行数': allRows.length,
+        // 'LL ON': allRows.filter(r => r.values[0] === '●').length,
+        // 'CC ON': allRows.filter(r => r.values[1] === '●').length,
+        // 'RR ON': allRows.filter(r => r.values[2] === '●').length,
+      };
+      
+      // 数値列の統計
+      const numericColumns = [3/*, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13*/]; // エンコーダ以降
+      numericColumns.forEach(colIndex => {
+        const values = allRows.map(r => r.values[colIndex]).filter(v => typeof v === 'number');
+        if (values.length > 0) {
+          const avg = values.reduce((a, b) => a + b, 0) / values.length;
+          const max = Math.max(...values);
+        //   const min = Math.min(...values);
+          stats[`${columnNames[colIndex]} 平均`] = avg.toFixed(1);
+          stats[`${columnNames[colIndex]} 最大`] = max;
+        //   stats[`${columnNames[colIndex]} 最小`] = min;
+        }
+      });
+      
+      return stats;
+    }
+    
+    function showControls() {
+      document.getElementById('searchInput').style.display = 'inline-block';
+      document.getElementById('jumpInput').style.display = 'inline-block';
+      document.getElementById('jumpBtn').style.display = 'inline-block';
+      document.getElementById('exportBtn').style.display = 'inline-block';
+    }
+    
+    // 検索機能
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+      const query = e.target.value.toLowerCase();
+      if (query === '') {
+        filteredRows = [...allRows];
+      } else {
+        filteredRows = allRows.filter(row => 
+          row.no.toString().includes(query) ||
+          row.values.some(v => v.toString().toLowerCase().includes(query)) ||
+          row.rawLine.toLowerCase().includes(query)
+        );
+      }
+      renderTable();
+    });
+    
+    // ジャンプ機能
+    document.getElementById('jumpBtn').addEventListener('click', function() {
+      const lineNo = parseInt(document.getElementById('jumpInput').value);
+      if (isNaN(lineNo)) return;
+      
+      const rows = document.querySelectorAll('#logTable tr');
+      for (let i = 1; i < rows.length; i++) {
+        const rowLineNo = parseInt(rows[i].cells[0].textContent);
+        if (rowLineNo === lineNo) {
+          rows[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+          rows[i].classList.add('highlight');
+          setTimeout(() => rows[i].classList.remove('highlight'), 2000);
+          break;
+        }
+      }
+    });
+    
+    // CSV出力機能
+    document.getElementById('exportBtn').addEventListener('click', function() {
+      const csvContent = [
+        ['No', ...columnNames].join(','),
+        ...filteredRows.map(row => [row.no, ...row.values].join(','))
+      ].join('\n');
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'mcr_log_export.csv';
+      link.click();
+    });
+  </script>
+  
+</body>
+</html>
