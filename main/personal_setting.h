@@ -301,7 +301,7 @@
  *	ステアセンター値
  *	@note 必ず車体ごとに変更！！
  */
-#define VR_CENTER 536
+#define VR_CENTER 537
 
 // 1mの距離
 // #define METER 1515L
@@ -345,6 +345,6 @@ typedef enum
 #define MTPWM_START 70 //%
 
 /*autoブレーキ関係*/
-#define F_Brake 70
-#define R_Brake 55
-#define Inside_ofset 80 //%
+#define F_Brake 80      //70
+#define R_Brake 40      //55
+#define Inside_ofset 80 //%　　80

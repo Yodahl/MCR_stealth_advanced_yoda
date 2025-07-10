@@ -81,6 +81,9 @@ void SD_file_close(void);
 void writeLog(void);
 void LOG_rec(void);
 
+// 再生走行関係
+void Log_Analysis(void);
+
 /**********************************************************************/
 /*
  * 変数定義
@@ -173,7 +176,7 @@ float p[7];
 // const char *C_DATE = __DATE__; /* コンパイルした日付           */
 // const char *C_TIME = __TIME__; /* コンパイルした時間           */
 
-volatile int pattern = 0; // マイコンカー動作パターン
+volatile int16_t pattern = 0; // マイコンカー動作パターン
 
 /*
  *	タイマカウント
@@ -238,12 +241,18 @@ volatile int16_t iAngleBuff;    // 計算用 割り込み内で使用
  *	サーボ関連2
  */
 volatile int16_t iSetAngle;
-volatile int16_t iSetAngle3;
 volatile int16_t iAngleBefore2;
-volatile int16_t iAngleBefore3;
 volatile int16_t iServoPwm2;
-volatile int16_t iServoPwm3;
 volatile int16_t cource = 0; // コースハズレ値
+
+// キャリブレーション関係
+// volatile int16_t angle = 80; // 切り替えしサーボ角度
+// volatile int16_t start_PWM = 4;
+// volatile int16_t cycleCount = 0; // 首を振った回数
+// volatile int16_t calib_pattern = 0;
+
+volatile float Judg_percent = 0.42;   // 閾値パーセント  0.4
+volatile float Judg_BK_percent = 0.2; // 閾値パーセント
 
 /*
  *	DataFlash関係
@@ -549,7 +558,7 @@ void loop()
             // iAngle0 = getServoAngle(); /* 0度の位置記憶 */
             // iAngle0 = VR_CENTER; // センター値固定
             iSetAngle = angle;
-            // iSetAngle = 40;
+            i = getServoAngle(); // ステアリング角度取得
             servoPwmOut(iServoPwm2);
 
             if (cycleCount < 4)
@@ -557,71 +566,47 @@ void loop()
                 if (cnt1 >= 5)
                 {
                     cnt1 = 0;
+                    // サーボ角度更新
+                    angle += step;
+                    if (angle > Max_angle || angle < -Max_angle)
+                    {
+                        step = -step; // 方向転換
+                        cycleCount++;
+                    }
 
-                    // int sensorValue = (anaSensCR_diff + anaSensCL_diff) / 2; // 値取得
-                    int sensorValue = anaSensCC_diff; // 値取得
+                    int sensorValue = anaSensCC_diff;
                     if (sensorValue > sensorMax)
-                    {
                         sensorMax = sensorValue;
-                    }
                     if (sensorValue < sensorMin)
-                    {
                         sensorMin = sensorValue;
-                    }
 
-                    if (angle > 0)
+                    if (i > 0)
                     {
                         // RR値取得
                         int sensorValueRR = anaSensRR_diff;
                         if (sensorValueRR > sensorMaxRR)
-                        {
                             sensorMaxRR = sensorValueRR;
-                        }
                         else if (sensorValueRR < sensorMinRR)
-                        {
                             sensorMinRR = sensorValueRR;
-                        }
-
                         int sensorValueUR = anaSensUR_diff;
                         if (sensorValueUR > sensorMaxUR)
-                        {
                             sensorMaxUR = sensorValueUR;
-                        }
                         else if (sensorValueUR < sensorMinUR)
-                        {
                             sensorMinUR = sensorValueUR;
-                        }
                     }
                     else
                     {
                         // LL値取得
                         int sensorValueLL = anaSensLL_diff;
                         if (sensorValueLL > sensorMaxLL)
-                        {
                             sensorMaxLL = sensorValueLL;
-                        }
                         else if (sensorValueLL < sensorMinLL)
-                        {
                             sensorMinLL = sensorValueLL;
-                        }
-
                         int sensorValueUL = anaSensUL_diff;
                         if (sensorValueUL > sensorMaxUL)
-                        {
                             sensorMaxUL = sensorValueUL;
-                        }
                         else if (sensorValueUL < sensorMinUL)
-                        {
                             sensorMinUL = sensorValueUL;
-                        }
-                    }
-                    // サーボ角度更新
-                    angle += step;
-
-                    if (angle > Max_angle || angle < -Max_angle)
-                    {
-                        step = -step; // 方向転換
-                        cycleCount++;
                     }
                 }
             }
@@ -646,34 +631,31 @@ void loop()
                 thrSensBK = threshold_BK;
 
                 angle = 0;
+                // servoPwmOut(iServoPwm2 / 3);
 
-                if ((getServoAngle() == 0))
+                if (i == 0)
                 {
-                    // pattern = 8; // 手押し
-                    pattern = 3; // STARTbar
+                    pattern = 8; // 手押し
+                    // pattern = 3; // STARTbar
                     // pattern = 1;
                     START_flag = false;
                     cnt1 = 0;
                     cnt2 = 0;
-                    // 初期化
-                    // sensorMax = INT_MIN;
-                    // sensorMin = INT_MAX;
                     step = 0;
-                    // cycleCount = 0;
+                    cycleCount = 0;
+                    break;
                 }
             }
 
             break;
 
-            /*
-             * スタートバー開待ち
-             */
+            // オートセット開始
         case 3:
-            servoPwmOut(iServoPwm / 3);
-            if (pushsw_get() && cnt2 > 300)
+            servoPwmOut(iServoPwm / 2);
+            if (pushsw_get())
             {
-                if (digiSensRR == ON) // キャリブレーション失敗
-                    pattern = 1;      // キャリブレーションやり直し
+                if (digiSensRR == ON || digiSensLL == ON) // キャリブレーション失敗
+                    pattern = 1;                          // キャリブレーションやり直し
                 else
                 {
                     START_flag = true;
@@ -685,30 +667,39 @@ void loop()
                 if (digiSensRR == ON)
                 {
                     pattern = 4;
+                    break;
                 }
                 else
                 {
                     motor_f(20, 20);
                 }
             }
+            // else
+            // {
+            //     iSetAngle = 0;
+            //     servoPwmOut(iServoPwm2 / 3);
+            // }
+
             break;
 
         case 4:
-            // servoPwmOut(iServoPwm / 2);
+            servoPwmOut(0);
             if (digiSensLL == OFF && digiSensRR == OFF)
             {
                 motor_f(0, 0);
                 pattern = 5;
+                break;
             }
             else
             {
                 motor_f(20, 20);
             }
+
             break;
 
         case 5:
             // servoPwmOut(iServoPwm / 2);
-            motor_f(0, 0);
+            // motor_f(0, 0);
             // if ((anaSensRR_diff > 10000) && START_flag)
             if (sensRRon == ON && iEncoder == 0)
             {
@@ -748,12 +739,12 @@ void loop()
          * スタートSW待ち
          */
         case 8:
-            servoPwmOut(iServoPwm / 3);
+            servoPwmOut(iServoPwm / 2);
             // lcdProcess();
             if (pushsw_get() == ON && cnt2 > 300)
             {
-                if (digiSensRR == ON) // キャリブレーション失敗
-                    pattern = 1;      // キャリブレーションやり直し
+                if (digiSensRR == ON || digiSensLL == ON || digiSensCC == OFF) // キャリブレーション失敗
+                    pattern = 1;                                               // キャリブレーションやり直し
                 else
                 {
                     // iAngle0 = getServoAngle(); /* 0度の位置記憶 */
@@ -809,6 +800,8 @@ void loop()
         case 9:
             motor_f(0, 0);
             motor_r(0, 0);
+            iSetAngle = 0;
+            servoPwmOut(iServoPwm2/3);
             if (cnt2 < 100)
             {
                 CPU_LED_2 = ON;
@@ -838,7 +831,6 @@ void loop()
                 check_sen_cnt = 0;
                 check_enc_cnt = 0;
             }
-            servoPwmOut(iServoPwm / 3); // ライントレース制御
             break;
 
             /*
@@ -936,7 +928,7 @@ void loop()
 
         case 102:
             lEncoderBuff = lEncoderTotal;
-            pattern = 106; // 106でもいい？
+            pattern = 104; // 106でもいい？
             break;
 
         case 104: // クロスライン後の処理(1段目の減速処理)
@@ -1180,8 +1172,7 @@ void loop()
 
                 if (sensRRon == ON /*&& anaSensCR_diff < thrSensCR*/)
                 {
-                    pattern =
-                        118; // ﾌﾛﾝﾄ左ｾﾝｻ（ﾃﾞｼﾞﾀﾙまたはｱﾅﾛｸﾞ）反応時次の処理へ
+                    pattern = 118; // ﾌﾛﾝﾄ左ｾﾝｻ（ﾃﾞｼﾞﾀﾙまたはｱﾅﾛｸﾞ）反応時次の処理へ
                     cnt1 = 0;
                 }
             }
@@ -1189,24 +1180,15 @@ void loop()
 
         case 118:
             if (crankDirection == 'L')
-            { // クランク方向　左
-                //					ST_A = 0;
-                //					ST_B = 1;
-                //					ST_PWM=0;
-                iSetAngle = CRANK_ANGLE_L / 2 + 20; /* +で左 -で右に曲がります      */
+            {                                       // クランク方向　左
+                iSetAngle = CRANK_ANGLE_L /*/ 2 + 20*/; /* +で左 -で右に曲がります      */
                 servoPwmOut(iServoPwm2);
                 motor_f(100, 70); // 前 （左,右）(100,70)
                 motor_r(60, 50);  // 後モータ（左,右）　
             }
             else if (crankDirection == 'R')
-            { // クランク方向　右
-                // カウンターステア
-                //					ST_A = 1;
-                //					ST_B = 0;
-                //					ST_PWM=0;
-                // ST_PWM=0;
-
-                iSetAngle = -(CRANK_ANGLE_R / 2 + 20); /* +で左 -で右に曲がります      */
+            {                                          // クランク方向　右
+                iSetAngle = -(CRANK_ANGLE_R /*/ 2 + 20*/); /* +で左 -で右に曲がります      */
                 servoPwmOut(iServoPwm2);
                 motor_f(70, 100); // 前 （左,右）(70,100)
                 motor_r(50, 60);  // 後モータ（左,右）
@@ -1267,7 +1249,7 @@ void loop()
             {                              // クランク方向　左
                 iSetAngle = CRANK_ANGLE_L; /* +で左 -で右に曲がります      */
                 servoPwmOut(iServoPwm2);
-                motor_f(-10, 60); // 前 （左,右)(100,70)
+                motor_f(-10, 60); // 前 （左,右)(100,70)    
                 motor_r(-10, 50); // 後モータ(左,右)
             }
             else if (crankDirection == 'R')
@@ -1288,11 +1270,14 @@ void loop()
             break;
 
         case 132:
-            /* 少し時間が経つまで待つ */
-            i = getServoAngle(); // ステアリング角度取得
-            servoPwmOut(iServoPwm);
-            motor_r(100, 100);
-            motor_f(100, 100);
+            if (lEncoderTotal - lEncoderBuff >= 800)
+            {
+                /* 少し時間が経つまで待つ */
+                i = getServoAngle(); // ステアリング角度取得
+                servoPwmOut(iServoPwm);
+                motor_r(100, 100);
+                motor_f(100, 100);
+            }
             if (abs(i) < 5)
             {
                 cnt1 = 0;
@@ -1588,7 +1573,7 @@ void loop()
         case 166: // 最内センサ　黒反応後の処理（大カウンター）　最内センサ　白反応時待ち
             if (laneDirection == 'L')
             {                                                                   // レーン方向　左
-                iSetAngle = -(LANE_ANGLE_L - 50); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
+                iSetAngle = -(LANE_ANGLE_L - 55); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
                 servoPwmOut(iServoPwm2);                                        // 2角度制御 3:割込制御無
                 motor_f(90, 80);                                                // 前 （左,右）
                 motor_r(90, 0);                                                 // 後（左,右)
@@ -1603,7 +1588,7 @@ void loop()
             }
             else if (laneDirection == 'R')
             {                                                                  // レーン方向　右　カウンター処理
-                iSetAngle = (LANE_ANGLE_L - 50); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
+                iSetAngle = (LANE_ANGLE_L - 55); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
                 servoPwmOut(iServoPwm2);                                       // 2角度制御 3:割込制御無
                 motor_f(80, 90);                                               // 前 （左,右）
                 motor_r(0, 90);                                                // 後（左,右)
@@ -1670,9 +1655,6 @@ void loop()
             motor_r(0, 0);
             crankMode = 1;
             pattern = 232;
-
-            if (!pushsw_get() && cnt1 > 500)
-                ; // SW押され待ち
             break;
 
         case 232:
@@ -1706,77 +1688,39 @@ void loop()
             }
             if (pushsw_get() && cnt1 > 500)
             {
+                SD_file_close(); // SDカードのファイル閉じる（閉じないとファイルが保存されない）
                 pattern = 234;
+                cnt1 = 0;
             }
             break;
 
         case 234:
             servoPwmOut(0);
             // ログ出力
-            Serial.print("\n");
-            Serial.print("Run Data Out\n");
-            SD_file_close();
-            CPU_LED_2 = OFF;
-            CPU_LED_3 = OFF;
-            pattern = 235;
-            // writeLog();//SDカードにログの書き込み
-            // SD_file_close();
-
-            // CPU_LED_2 = ON;
-            // CPU_LED_3 = ON;
-
-            // /* 最後のデータが書き込まれるまで待つ */
-            // if (microSDProcessEnd() == 0) {
-            //   pattern = 235;
-            //   CPU_LED_2 = OFF;
-            //   CPU_LED_3 = OFF;
-            // }
-            // pattern = 235;
-
+            // Serial.print("\n");
+            // Serial.print("Run Data Out\n");
+            CPU_LED_2 = ON;
+            CPU_LED_3 = ON;
+            if (pushsw_get() && cnt1 > 500)
+            {
+                Log_Analysis();
+                pattern = 235;
+            }
             break;
 
         case 235:
-            /* 何もしない */
             break;
 
         case 241:
-            /* 停止 */
-            servoPwmOut(0);
-            motor_f(0, 0);
-            motor_r(0, 0);
-            // setBeepPatternS(0xc000);
-            saveFlag = 0;
-            // saveSendIndex = 0;
-            pattern = 243;
-            cnt1 = 0;
             break;
 
         case 242:
-            /* プッシュスイッチが離されたかチェック */
-            if (pushsw_get() == OFF)
-            {
-                pattern = 243;
-                cnt1 = 0;
-            }
             break;
 
         case 243:
-            /* 0.5s待ち */
-            if (cnt1 >= 500)
-            {
-                pattern = 245;
-                cnt1 = 0;
-            }
             break;
 
         case 245:
-            // Serial2.begin(115200);
-            while (!Serial2)
-                ;
-            /* タイトル転送、転送準備 */
-            Serial2.print("\n");
-            Serial2.print("Run Data Out\n");
-            pattern = 246;
             break;
 
         case 246:
@@ -1785,9 +1729,6 @@ void loop()
             break;
 
         case 247:
-            /* 転送終了 */
-            while (1)
-                ;
             break;
 
         default:
@@ -2434,14 +2375,14 @@ int check_leftline(void)
 int getAnalogSensor(void)
 {
     int ret;
-    if (pattern == 50 || pattern < 8)
-    {
-        ret = (anaSensUL_diff) - (anaSensUR_diff); /* アナログセンサ情報取得    左大：＋ 　右大：-　  */
-    }
-    else
-    {
+    // if (pattern == 50 || pattern < 8)
+    // {
+    //     ret = (anaSensUL_diff) - (anaSensUR_diff); /* アナログセンサ情報取得    左大：＋ 　右大：-　  */
+    // }
+    // else
+    // {
     ret = (anaSensCL_diff) - (anaSensCR_diff); /* アナログセンサ情報取得    左大：＋ 　右大：-　  */
-    }
+    // }
 
     return ret;
 }
@@ -2591,36 +2532,6 @@ void servoControl2(void)
     iServoPwm2 = iRet;
 
     iAngleBefore2 = j; /* 次回はこの値が1ms前の値となる*/
-}
-
-/************************************************************************/
-/* サーボモータ2制御  角度制御用(キャリブレーション時)                        */
-/* 引数　 なし                                                          */
-/* 戻り値 グローバル変数 iServoPwm に代入                               */
-/************************************************************************/
-void servoControl3(void)
-{
-
-    signed int i, j, iRet, iP, iD;
-    signed int kp, kd;
-
-    i = iSetAngle;
-    j = getServoAngle();
-
-    /* サーボモータ用PWM値計算 */
-    iP = 2 * (j - i);              /* 比例                         */
-    iD = 10 * (iAngleBefore3 - j); /* 微分(目安はPの5～10倍)       */
-    iRet = iP - iD;
-    iRet /= 2;
-
-    /* PWMの上限の設定 */
-    if (iRet > 100)
-        iRet = 100; /* マイコンカーが安定したら     */
-    if (iRet < -100)
-        iRet = -100; /* 上限を70くらいにしてください */
-    iServoPwm3 = iRet;
-
-    iAngleBefore3 = j; /* 次回はこの値が1ms前の値となる*/
 }
 
 /************************************************************************/
@@ -3346,8 +3257,19 @@ void SD_file_open(void)
         return;
     }
 
+    // ログディレクトリの作成
+    const char *logDir = "LOG";
+    if (!SD.exists(logDir))
+    {
+        SD.mkdir(logDir);
+    }
+
     int i = 0;
-    microSD = SD.open("renban.txt", FILE_READ);
+    char renbanPath[32];
+    sprintf(renbanPath, "%s/renban.txt", logDir);
+
+    // 連番ファイルの読み取り
+    microSD = SD.open(renbanPath, FILE_READ);
     if (microSD)
     {
         int length = microSD.available();
@@ -3360,10 +3282,12 @@ void SD_file_open(void)
         microSD.close();
     }
 
-    if (SD.exists("renban.txt"))
-        SD.remove("renban.txt");
+    // 既存の連番ファイルを削除
+    if (SD.exists(renbanPath))
+        SD.remove(renbanPath);
 
-    microSD = SD.open("renban.txt", FILE_WRITE);
+    // 新しい連番をファイルに書き込み
+    microSD = SD.open(renbanPath, FILE_WRITE);
     if (microSD)
     {
         sprintf(filename, "%d", i + 1);
@@ -3371,7 +3295,10 @@ void SD_file_open(void)
         microSD.close();
     }
 
-    sprintf(filename, "log%05d.csv", i + 1);
+    // ログファイルのパスを作成（ディレクトリ内）
+    // sprintf(filename, "LogData/log%05d.csv", i + 1);
+    // sprintf(filename, "LogData/log%05d.csv", i + 1);
+    sprintf(filename, "%s/log%05d.csv", logDir, i + 1);
     microSD = SD.open(filename, FILE_WRITE);
 
     //  //通信速度Hz(e6=10の6乗),microSDのCS1(pins_arduino.hで定義)
@@ -3400,11 +3327,11 @@ void LOG_rec(void)
     saveDataA[7][logCt] = anaSensCC_diff;
     saveDataA[8][logCt] = anaSensCR_diff;
     saveDataA[9][logCt] = motor_buff_stare; //: PWMステアリング;
-    saveDataA[10][logCt] = motor_buff_Fr;   //: PWM前右;
-    saveDataA[11][logCt] = motor_buff_Fl;   //: PWM前左;
-    saveDataA[12][logCt] = motor_buff_Rr;   //: PWM後右;
-    saveDataA[13][logCt] = motor_buff_Rl;   //: PWM後左;
-    saveDataA[14][logCt] = logCt;
+    saveDataA[10][logCt] = motor_buff_Fl;   //: PWM前左;
+    saveDataA[11][logCt] = motor_buff_Rl;   //: PWM後左;
+    saveDataA[12][logCt] = motor_buff_Fr;   //: PWM前右;
+    saveDataA[13][logCt] = motor_buff_Rr;   //: PWM後右;
+    saveDataA[14][logCt] = lEncoderTotal;
     // saveDataA[15][logCt] = ;
 
     logCt++;
@@ -3467,6 +3394,269 @@ void SD_file_close(void)
     servoPwmOut(0);
     CPU_LED_2 = OFF;
     CPU_LED_3 = OFF;
+}
+
+/***********************************************************************/
+/**
+ * ログデータ解析，再生走行用データ作成
+ */
+void Log_Analysis(void)
+{
+    // 通信速度Hz(e6=10の6乗),microSDのCS1(pins_arduino.hで定義)
+    if (!SD.begin(2.4e6, CS1))
+    {
+        // Serial.println("SD初期化に失敗しました");
+        return;
+    }
+
+    // 再生データディレクトリの作成
+    const char *repDataDir = "REP";
+    if (!SD.exists(repDataDir))
+    {
+        SD.mkdir(repDataDir);
+    }
+
+    // ログディレクトリから最新のログファイルを探す
+    const char *logDir = "LOG";
+
+    int latestLogNum = 0;
+    char renbanPath[32];
+    sprintf(renbanPath, "%s/renban.txt", logDir);
+
+    // 実際に存在する最新のログファイルを探す
+    // まず連番ファイルから大まかな番号を取得
+    microSD = SD.open(renbanPath, FILE_READ);
+    if (microSD)
+    {
+        int length = microSD.available();
+        if (length > 8)
+            length = 8;
+        char buffer[16];
+        microSD.read(buffer, length);
+        sscanf(buffer, "%d", &latestLogNum);
+        microSD.close();
+
+        if (latestLogNum < 1)
+            latestLogNum = 1;
+    }
+
+    // 実際に存在する最新のファイルを逆順で探す
+    bool fileFound = false;
+    for (int searchNum = latestLogNum + 10; searchNum >= 1; searchNum--) // 余裕を持って+10から検索
+    {
+        char testPath[64];
+        sprintf(testPath, "%s/log%05d.csv", logDir, searchNum);
+        if (SD.exists(testPath))
+        {
+            latestLogNum = searchNum;
+            fileFound = true;
+            break;
+        }
+    }
+
+    if (!fileFound)
+    {
+        // ファイルが見つからない場合は1から順番に探す
+        for (int searchNum = 1; searchNum <= 99999; searchNum++)
+        {
+            char testPath[64];
+            sprintf(testPath, "%s/log%05d.csv", logDir, searchNum);
+            if (SD.exists(testPath))
+            {
+                latestLogNum = searchNum;
+            }
+            else if (latestLogNum > 0)
+            {
+                // 連続した番号が途切れたら、それが最新
+                break;
+            }
+        }
+    }
+
+    // デバッグ出力
+    // Serial.print("Latest log number: ");
+    // Serial.println(latestLogNum);
+
+    // 最新のログファイルを開く
+    char latestLogPath[64];
+    sprintf(latestLogPath, "%s/log%05d.csv", logDir, latestLogNum);
+
+    // デバッグ出力
+    // Serial.print("Opening log file: ");
+    // Serial.println(latestLogPath);
+
+    microSD = SD.open(latestLogPath, FILE_READ);
+    if (!microSD)
+    {
+        // Serial.println("最新のログファイルが見つかりません");
+        return;
+    }
+
+    // ここから解析処理を記述
+    // microSD変数で最新のログファイルが読み取り可能状態で開かれています
+
+    char line[256];
+    char *token;
+    int lineCount = 0;
+    uint16_t buff_pattern = 0;
+    float buff_angle = 0.0;
+    uint16_t buff_distance = 0;
+
+    // ストレート区間の解析用変数
+    bool inStraight = false;
+    uint16_t straightStartDistance = 0;
+
+    // 既存ファイルを削除してから新規作成（上書き）
+    char outputPath[64];
+    sprintf(outputPath, "%s/Log_Rep.csv", repDataDir);
+
+    // 既存ファイルがあれば削除
+    if (SD.exists(outputPath))
+    {
+        SD.remove(outputPath);
+    }
+
+    // 新規作成
+    File outputFile = SD.open(outputPath, FILE_WRITE);
+
+    if (outputFile)
+    {
+        // CSVヘッダーを書き込み
+        outputFile.println("start_distance,end_distance");
+        outputFile.flush(); // ヘッダー書き込み後にフラッシュ
+    }
+    else
+    {
+        // Serial.println("出力ファイルの作成に失敗しました");
+        microSD.close();
+        return;
+    }
+
+    // CSVファイルを1行ずつ読み込み
+    while (microSD.available())
+    {
+        // 1行読み込み（改行文字処理を改善）
+        int i = 0;
+        while (microSD.available() && i < sizeof(line) - 1)
+        {
+            char c = microSD.read();
+            if (c == '\n')
+                break;
+            if (c != '\r') // CR文字は無視
+                line[i++] = c;
+        }
+        line[i] = '\0';
+
+        if (strlen(line) == 0)
+            continue;
+
+        lineCount++;
+
+        // デバッグ出力
+        // Serial.print("Line ");
+        // Serial.print(lineCount);
+        // Serial.print(": ");
+        // Serial.println(line);
+
+        // ヘッダー行をスキップ（1行目）
+        if (lineCount == 1)
+            continue;
+
+        // 変数を初期化
+        buff_pattern = 0;
+        buff_angle = 0.0;
+        buff_distance = 0;
+
+        // CSV解析（カンマ区切り）
+        char *lineCopy = line; // strtokは元の文字列を変更するので
+        token = strtok(lineCopy, ",");
+        int columnIndex = 0;
+
+        while (token != NULL)
+        {
+            switch (columnIndex)
+            {
+            case 2: // pattern列
+                buff_pattern = atoi(token);
+                break;
+            case 4: // angle列
+                buff_angle = atof(token);
+                break;
+            case 14: // distance列
+                buff_distance = atoi(token);
+                break;
+            }
+            token = strtok(NULL, ",");
+            columnIndex++;
+        }
+
+        // デバッグ出力
+        // Serial.print("Pattern: ");
+        // Serial.print(buff_pattern);
+        // Serial.print(", Angle: ");
+        // Serial.print(buff_angle);
+        // Serial.print(", Distance: ");
+        // Serial.println(buff_distance);
+
+        // pattern==11でアングルがまっすぐの場合
+        if (buff_pattern == 11 && buff_angle >= -5.0 && buff_angle <= 5.0)
+        {
+            if (!inStraight)
+            {
+                // ストレート区間開始
+                inStraight = true;
+                straightStartDistance = buff_distance;
+                // Serial.print("Straight start at: ");
+                // Serial.println(straightStartDistance);
+            }
+        }
+        else
+        {
+            if (inStraight)
+            {
+                // ストレート区間終了 - 即座にCSVに出力
+                inStraight = false;
+                // Serial.print("Straight end at: ");
+                // Serial.println(buff_distance);
+                // Serial.print("Writing: ");
+                // Serial.print(straightStartDistance);
+                // Serial.print(",");
+                // Serial.println(buff_distance);
+
+                if (outputFile)
+                {
+                    outputFile.print(straightStartDistance);
+                    outputFile.print(",");
+                    outputFile.println(buff_distance);
+                    outputFile.flush(); // バッファを強制的に書き込み
+                }
+            }
+        }
+    }
+
+    // 最後にストレート区間が終了していない場合の処理
+    if (inStraight && outputFile)
+    {
+        // Serial.print("Final straight end at: ");
+        // Serial.println(buff_distance);
+        outputFile.print(straightStartDistance);
+        outputFile.print(",");
+        outputFile.println(buff_distance);
+        outputFile.flush(); // バッファを強制的に書き込み
+    }
+
+    // 解析完了後、ファイルを閉じる
+    // if (outputFile)
+    // {
+    outputFile.close();
+    CPU_LED_2 = OFF;
+    CPU_LED_3 = OFF;
+    // }
+
+    // 入力ファイルも閉じる
+    microSD.close();
+
+    // Serial.println("Log analysis completed");
 }
 
 /************************************************************************/
