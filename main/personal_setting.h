@@ -269,8 +269,19 @@
 #define THRESHOLD_H 1000 // アナログセンサ(0～1023)白判定しきい値  1000
 #define THRESHOLD_L 800  // アナログセンサ(0～1023)黒判定しきい値  800
 
+// #define THR_Sens 500    //白判定しきい値  800
+// #define thrSensBK 150   //黒判定しきい値  200
+
 #define ON 1
 #define OFF 0 // 走行パラメータ
+
+#define sUL 0
+#define sLL 1
+#define sCL 2
+#define sCC 3
+#define sCR 4
+#define sRR 5
+#define sUR 6
 
 #define STREAT_JUDGE_ANGLE 40
 #define CORNER_SPEED 65         // 未使用
@@ -310,7 +321,7 @@
 /*
  *	坂関連
  */
-#define SLOPE_UP_START 500   // 上り開始判定
+#define SLOPE_UP_START 500   // 上り開始判定　200
 
 /*
  *	内臓フラッシュ関連
