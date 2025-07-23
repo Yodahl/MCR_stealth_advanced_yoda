@@ -19,7 +19,7 @@ volatile uint16_t logRd = 0;
 volatile bool whichsave = false;
 volatile bool isWriting = false;
 volatile uint16_t log_pattern = 0;
-volatile uint8_t motor_buff_Fl, motor_buff_Fr, motor_buff_Rl, motor_buff_Rr, motor_buff_stare;
+volatile int8_t motor_buff_Fl, motor_buff_Fr, motor_buff_Rl, motor_buff_Rr, motor_buff_stare;
 
 /**********************************************************************/
 /*
@@ -83,6 +83,10 @@ void LOG_rec(void);
 
 // 再生走行関係
 void Log_Analysis(void);
+void Open_Rep(void);
+bool Check_StraightSection(uint16_t current_distance);
+
+int straight_section_count = 0; // 実際に読み込まれた直線区間数
 
 /**********************************************************************/
 /*
@@ -142,7 +146,7 @@ volatile uint16_t thrSensCL;
 volatile uint16_t thrSensLL;
 volatile uint16_t thrSensUL;
 // volatile uint16_t THR_Sens = 800;
-volatile uint16_t thrSensBK; // 黒閾値
+// volatile uint16_t thrSensBK; // 黒閾値
 
 // 2値化
 volatile uint8_t digiSensUR;
@@ -168,10 +172,10 @@ volatile uint16_t sensorMinCR; // CRの最小値
 volatile uint16_t sensorMaxCL; // CLの最小値
 volatile uint16_t sensorMinCL; // CLの最小値
 
-float pbuf[7][3];
-float p[7];
+volatile uint16_t old_sensorMax;
+volatile uint16_t old_sensorMin;
 
-volatile uint16_t sensNormalized[7];
+volatile uint16_t sensNormalized[5];
 
 /*
  *	R8Cプログラムから引用
@@ -214,12 +218,15 @@ volatile int8_t crank_count = 0;
 volatile int8_t linellcount = 0;
 volatile int8_t linerrcount = 0;
 
+// volatile int16_t trace_offset = 0;
+
 volatile int8_t sensLLon = OFF;
 volatile int8_t sensRRon = OFF;
 
 volatile bool SLOPE_flag = false;
 
 volatile bool START_flag = false;
+volatile bool Cheat_flag = false;
 volatile bool Run_end = false;
 
 /*
@@ -256,6 +263,8 @@ volatile int16_t cource = 0; // コースハズレ値
 
 // volatile float Judg_percent = 0.42;   // 閾値パーセント  0.4
 // volatile float Judg_BK_percent = 0.2; // 閾値パーセント
+
+// volatile int atten_percent = 0.9; // 閾値減衰パーセント
 
 /*
  *	DataFlash関係
@@ -321,7 +330,7 @@ void setup()
     interruptTimer.open();
 
     /* シリアル初期化 */
-    Serial2.begin(115200);
+    Serial2.begin(9600);
     // Serial2.begin(38400);
 
     //  while(!Serial);
@@ -424,7 +433,7 @@ void loop()
         if (digiSensLL == ON)
         {
             linellcount++;
-            if (linellcount > 30) // 45
+            if (linellcount > 45) // 45
             {
                 sensLLon = ON;
                 // CPU_LED_2 = ON;
@@ -440,7 +449,7 @@ void loop()
         if (digiSensRR == ON)
         {
             linerrcount++;
-            if (linerrcount > 30)
+            if (linerrcount > 45)
             {
                 sensRRon = ON;
                 // CPU_LED_2 = ON;
@@ -473,6 +482,7 @@ void loop()
                 pattern = 151;
                 // SLOPE_flag = true;
                 laneDirection = 'L';
+                // trace_offset = -500;
                 lEncoderBuff = lEncoderTotal;
             }
             // 右ハーフラインチェック
@@ -483,6 +493,7 @@ void loop()
                 pattern = 151;
                 // SLOPE_flag = true;
                 laneDirection = 'R';
+                // trace_offset = 500;
                 lEncoderBuff = lEncoderTotal;
             }
             // 登坂検出
@@ -502,10 +513,14 @@ void loop()
         switch (pattern)
         {
         case 0:
+            if (dipsw_get() & 0x02)
+            {
+                Open_Rep();
+                Cheat_flag = true;
+            }
+            cnt1 = 0;
             // pattern = 2;
             pattern = 1;
-            SD_file_open();
-            cnt1 = 0;
             break;
 
             /*
@@ -518,31 +533,30 @@ void loop()
 
             if (pushsw_get())
             {
-                // clearI2CEeprom();
-
+                SD_file_open();
                 //   パラメータ保存
                 writeDataFlashParameter();
                 Serial2.print("writeDataFlashParameter");
                 cnt1 = 0;
                 iAngle0 = VR_CENTER; // センター値固定
                 // iAngle0 = getServoAngle(); // 0度の位置記憶
-                pattern = 2; // ゲートセンサ無し （手押し）
+                pattern = 8; // ゲートセンサ無し （手押し）
                 // pattern = 3; // ゲートセンサ有り
 
-                sensorMax = 800; // センサの最大値
-                sensorMin = 300; // センサの最小値
+                // sensorMax = 800; // センサの最大値
+                // sensorMin = 300; // センサの最小値
 
-                sensorMaxRR = 800; // RRの最大値
-                sensorMinRR = 300; // RRの最小値
+                // sensorMaxRR = 800; // RRの最大値
+                // sensorMinRR = 300; // RRの最小値
 
-                sensorMaxLL = 800; // LLの最大値
-                sensorMinLL = 300; // LLの最小値
+                // sensorMaxLL = 800; // LLの最大値
+                // sensorMinLL = 300; // LLの最小値
 
-                sensorMaxCR = 800; // CRの最大値
-                sensorMinCR = 300; // CRの最小値
+                // sensorMaxCR = 800; // CRの最大値
+                // sensorMinCR = 300; // CRの最小値
 
-                sensorMaxCL = 800; // CLの最小値
-                sensorMinCL = 300; // CLの最小値
+                // sensorMaxCL = 800; // CLの最小値
+                // sensorMinCL = 300; // CLの最小値
 
                 break;
             }
@@ -555,7 +569,7 @@ void loop()
             static int step = 1;       // サーボの移動
             static int cycleCount = 0; // 首を振った回数
 
-            static float Judg_percent = 0.3;    // 閾値パーセント  0.4
+            static float Judg_percent = 0.4;    // 閾値パーセント  0.4
             static float Judg_BK_percent = 0.2; // 閾値パーセント
 
             // iAngle0 = getServoAngle(); /* 0度の位置記憶 */
@@ -618,8 +632,8 @@ void loop()
                 // 閾値計算
                 int threshold = (sensorMax - sensorMin) * Judg_percent; // CC閾値
                 // int thresholdRL = (((sensorMaxRR - sensorMinRR) + (sensorMaxLL - sensorMinLL)) / 2) * Judg_percent; // RR,LL閾値
-                int thresholdRR = (sensorMaxRR - sensorMinRR) * Judg_percent;                                      // RR閾値
-                int thresholdLL = (sensorMaxLL - sensorMinLL) * Judg_percent;                                      // LL閾値
+                int thresholdRR = (sensorMaxRR - sensorMinRR) * Judg_percent;                                        // RR閾値
+                int thresholdLL = (sensorMaxLL - sensorMinLL) * Judg_percent;                                        // LL閾値
                 int thresholdCRL = (((sensorMaxCR - sensorMinCR) + (sensorMaxCL - sensorMinCL)) / 2) * Judg_percent; // UR,UL閾値
                 // int thresholdUL = (sensorMaxUL - sensorMinUL) * Judg_percent; // UL閾値
                 int threshold_BK = (sensorMax - sensorMin) * Judg_BK_percent; // UR,UL閾値
@@ -631,7 +645,7 @@ void loop()
                 thrSensCL = thresholdCRL;
                 thrSensLL = thresholdLL;
                 // thrSensUL = thresholdU;
-                thrSensBK = threshold_BK;
+                // thrSensBK = threshold_BK;
 
                 angle = 0;
                 // servoPwmOut(iServoPwm2 / 3);
@@ -845,6 +859,7 @@ void loop()
             servoPwmOut(iServoPwm); // ライントレース制御
             i = getServoAngle();    // ステアリング角度取得
             iSetAngle = 0;
+            // trace_offset = 0;
 
             if (Angle_D > 0)
             {
@@ -882,7 +897,21 @@ void loop()
             }
             else
             {
-                PDtrace_Control(i, data_buff[TRG_SPEED_ADDR]);
+                if (Cheat_flag)
+                {
+                    if (Check_StraightSection(lEncoderTotal))
+                    {
+                        PDtrace_Control(i, 80);
+                    }
+                    else
+                    {
+                        PDtrace_Control(i, data_buff[CORNER_SPEED_ADDR]);
+                    }
+                }
+                else
+                {
+                    PDtrace_Control(i, data_buff[TRG_SPEED_ADDR]);
+                }
             }
 
             if (lEncoderTotal - lEncoderBuff >= 5000 && !SLOPE_flag && slopeTotalCount != 0)
@@ -896,7 +925,8 @@ void loop()
             }
             break;
 
-        case 50:                    // 坂
+        case 50: // 坂
+            // trace_offset = 0;
             servoPwmOut(iServoPwm); // ライントレース制御
             i = getServoAngle();    // ステアリング角度取得
             iSetAngle = 0;
@@ -916,6 +946,7 @@ void loop()
              */
         case 101:
             /* クロスライン通過処理 */
+            // trace_offset = 0;
             servoPwmOut(iServoPwm);
             R_LED = ON;
             L_LED = ON;
@@ -1369,6 +1400,7 @@ void loop()
             if (digiSensCL == OFF && digiSensCC == OFF && digiSensCR == OFF)
             {
                 pattern = 154; // 全てのセンサ　黒検出時次の処理へ
+                // trace_offset = 0;
             }
 
             // レーン誤検知用の通常復帰
@@ -1575,11 +1607,11 @@ void loop()
 
         case 166: // 最内センサ　黒反応後の処理（大カウンター）　最内センサ　白反応時待ち
             if (laneDirection == 'L')
-            { // レーン方向　左
+            {                                                                   // レーン方向　左
                 iSetAngle = -(LANE_ANGLE_L - 50); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
-                servoPwmOut(iServoPwm2); // 2角度制御 3:割込制御無
-                motor_f(90, 80);         // 前 （左,右）
-                motor_r(90, 0);          // 後（左,右)
+                servoPwmOut(iServoPwm2);                                        // 2角度制御 3:割込制御無
+                motor_f(90, 80);                                                // 前 （左,右）
+                motor_r(90, 0);                                                 // 後（左,右)
                 if (sensRRon == ON && cnt1 >= 10)
                 {
                     pattern = 168;
@@ -1590,11 +1622,11 @@ void loop()
                 }
             }
             else if (laneDirection == 'R')
-            { // レーン方向　右　カウンター処理
+            {                                                                  // レーン方向　右　カウンター処理
                 iSetAngle = (LANE_ANGLE_L - 50); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
-                servoPwmOut(iServoPwm2); // 2角度制御 3:割込制御無
-                motor_f(80, 90);         // 前 （左,右）
-                motor_r(0, 90);          // 後（左,右)
+                servoPwmOut(iServoPwm2);                                       // 2角度制御 3:割込制御無
+                motor_f(80, 90);                                               // 前 （左,右）
+                motor_r(0, 90);                                                // 後（左,右)
                 if (sensLLon == ON && cnt1 >= 10)
                 {
                     pattern = 168;
@@ -1803,25 +1835,36 @@ void timerCallback(timer_callback_args_t __attribute((unused)) * p_args)
         anaSensUL_diff = anaSensUL_on - anaSensUL_off;
 
         // 差分の正規化
-        // Diff_Nomal();
+        // if (pattern == 11 || pattern == 8)
+        Diff_Nomal();
 
         // 2値化
-        // digiSensUR = ((sensNormalized[sUR] > THR_Sens) ? ON : OFF);
-        // digiSensRR = ((sensNormalized[sRR] > THR_Sens) ? ON : OFF);
-        // digiSensCR = ((sensNormalized[sCR] > THR_Sens) ? ON : OFF);
-        // digiSensCC = ((sensNormalized[sCC] > THR_Sens) ? ON : OFF);
-        // digiSensCL = ((sensNormalized[sCL] > THR_Sens) ? ON : OFF);
-        // digiSensLL = ((sensNormalized[sLL] > THR_Sens) ? ON : OFF);
-        // digiSensUL = ((sensNormalized[sUL] > THR_Sens) ? ON : OFF);
+        digiSensRR = ((sensNormalized[sRR] > THR_Sens) ? ON : OFF);
+        digiSensCR = ((sensNormalized[sCR] > THR_Sens) ? ON : OFF);
+        digiSensCC = ((sensNormalized[sCC] > THR_Sens) ? ON : OFF);
+        digiSensCL = ((sensNormalized[sCL] > THR_Sens) ? ON : OFF);
+        digiSensLL = ((sensNormalized[sLL] > THR_Sens) ? ON : OFF);
 
-        digiSensUR = ((anaSensUR_diff > thrSensUR) ? ON : OFF);
-        digiSensRR = ((anaSensRR_diff > thrSensRR) ? ON : OFF);
-        digiSensCR = ((anaSensCR_diff > thrSensCR) ? ON : OFF);
-        digiSensCC = ((anaSensCC_diff > thrSensCC) ? ON : OFF);
-        digiSensCL = ((anaSensCL_diff > thrSensCL) ? ON : OFF);
-        digiSensLL = ((anaSensLL_diff > thrSensLL) ? ON : OFF);
-        digiSensUL = ((anaSensUL_diff > thrSensUL) ? ON : OFF);
-
+        // if (((motor_buff_Fl + motor_buff_Rl + motor_buff_Fr + motor_buff_Fr) / 4) > 80)
+        // {
+        //     digiSensUR = ((anaSensUR_diff > thrSensUR * atten_percent) ? ON : OFF);
+        //     digiSensRR = ((anaSensRR_diff > thrSensRR * atten_percent) ? ON : OFF);
+        //     digiSensCR = ((anaSensCR_diff > thrSensCR * atten_percent) ? ON : OFF);
+        //     digiSensCC = ((anaSensCC_diff > thrSensCC * atten_percent) ? ON : OFF);
+        //     digiSensCL = ((anaSensCL_diff > thrSensCL * atten_percent) ? ON : OFF);
+        //     digiSensLL = ((anaSensLL_diff > thrSensLL * atten_percent) ? ON : OFF);
+        //     digiSensUL = ((anaSensUL_diff > thrSensUL * atten_percent) ? ON : OFF);
+        // }
+        // else
+        // {
+        //     digiSensUR = ((anaSensUR_diff > thrSensUR) ? ON : OFF);
+        //     digiSensRR = ((anaSensRR_diff > thrSensRR) ? ON : OFF);
+        //     digiSensCR = ((anaSensCR_diff > thrSensCR) ? ON : OFF);
+        //     digiSensCC = ((anaSensCC_diff > thrSensCC) ? ON : OFF);
+        //     digiSensCL = ((anaSensCL_diff > thrSensCL) ? ON : OFF);
+        //     digiSensLL = ((anaSensLL_diff > thrSensLL) ? ON : OFF);
+        //     digiSensUL = ((anaSensUL_diff > thrSensUL) ? ON : OFF);
+        // }
 
         /* サーボモータ制御(PD計算) */
         servoControl();
@@ -1862,24 +1905,36 @@ void timerCallback(timer_callback_args_t __attribute((unused)) * p_args)
         anaSensUL_diff = anaSensUL_on - anaSensUL_off;
 
         // 差分の正規化
-        // Diff_Nomal();
+        // if (pattern == 11 || pattern == 8)
+        Diff_Nomal();
 
         // 2値化
-        // digiSensUR = ((sensNormalized[sUR] > THR_Sens) ? ON : OFF);
-        // digiSensRR = ((sensNormalized[sRR] > THR_Sens) ? ON : OFF);
-        // digiSensCR = ((sensNormalized[sCR] > THR_Sens) ? ON : OFF);
-        // digiSensCC = ((sensNormalized[sCC] > THR_Sens) ? ON : OFF);
-        // digiSensCL = ((sensNormalized[sCL] > THR_Sens) ? ON : OFF);
-        // digiSensLL = ((sensNormalized[sLL] > THR_Sens) ? ON : OFF);
-        // digiSensUL = ((sensNormalized[sUL] > THR_Sens) ? ON : OFF);
+        digiSensRR = ((sensNormalized[sRR] > THR_Sens) ? ON : OFF);
+        digiSensCR = ((sensNormalized[sCR] > THR_Sens) ? ON : OFF);
+        digiSensCC = ((sensNormalized[sCC] > THR_Sens) ? ON : OFF);
+        digiSensCL = ((sensNormalized[sCL] > THR_Sens) ? ON : OFF);
+        digiSensLL = ((sensNormalized[sLL] > THR_Sens) ? ON : OFF);
 
-        digiSensUR = ((anaSensUR_diff > thrSensUR) ? ON : OFF);
-        digiSensRR = ((anaSensRR_diff > thrSensRR) ? ON : OFF);
-        digiSensCR = ((anaSensCR_diff > thrSensCR) ? ON : OFF);
-        digiSensCC = ((anaSensCC_diff > thrSensCC) ? ON : OFF);
-        digiSensCL = ((anaSensCL_diff > thrSensCL) ? ON : OFF);
-        digiSensLL = ((anaSensLL_diff > thrSensLL) ? ON : OFF);
-        digiSensUL = ((anaSensUL_diff > thrSensUL) ? ON : OFF);
+        // if (((motor_buff_Fl + motor_buff_Rl + motor_buff_Fr + motor_buff_Fr) / 4) > 80)
+        // {
+        //     digiSensUR = ((anaSensUR_diff > thrSensUR * atten_percent) ? ON : OFF);
+        //     digiSensRR = ((anaSensRR_diff > thrSensRR * atten_percent) ? ON : OFF);
+        //     digiSensCR = ((anaSensCR_diff > thrSensCR * atten_percent) ? ON : OFF);
+        //     digiSensCC = ((anaSensCC_diff > thrSensCC * atten_percent) ? ON : OFF);
+        //     digiSensCL = ((anaSensCL_diff > thrSensCL * atten_percent) ? ON : OFF);
+        //     digiSensLL = ((anaSensLL_diff > thrSensLL * atten_percent) ? ON : OFF);
+        //     digiSensUL = ((anaSensUL_diff > thrSensUL * atten_percent) ? ON : OFF);
+        // }
+        // else
+        // {
+        // digiSensUR = ((anaSensUR_diff > thrSensUR) ? ON : OFF);
+        // digiSensRR = ((anaSensRR_diff > thrSensRR) ? ON : OFF);
+        // digiSensCR = ((anaSensCR_diff > thrSensCR) ? ON : OFF);
+        // digiSensCC = ((anaSensCC_diff > thrSensCC) ? ON : OFF);
+        // digiSensCL = ((anaSensCL_diff > thrSensCL) ? ON : OFF);
+        // digiSensLL = ((anaSensLL_diff > thrSensLL) ? ON : OFF);
+        // digiSensUL = ((anaSensUL_diff > thrSensUL) ? ON : OFF);
+        // }
 
         /* サーボモータ制御(PD計算) */
         servoControl();
@@ -1918,7 +1973,7 @@ void timerCallback(timer_callback_args_t __attribute((unused)) * p_args)
                 }
                 if (which_slope)
                 {
-                    Slope_thr[slope_thr_cnt] = sensNormalized[sCC];
+                    Slope_thr[slope_thr_cnt] = anaSensCC_diff;
                     if (slope_thr_cnt >= 5)
                     {
                         slope_thr_cnt = 0;
@@ -1931,7 +1986,7 @@ void timerCallback(timer_callback_args_t __attribute((unused)) * p_args)
                 }
                 else
                 {
-                    Slope_thr_1[slope_thr_cnt_1] = sensNormalized[sCC];
+                    Slope_thr_1[slope_thr_cnt_1] = anaSensCC_diff;
                     if (slope_thr_cnt_1 >= 5)
                     {
                         slope_thr_cnt_1 = 0;
@@ -2264,39 +2319,56 @@ void servoPwmOut(int pwm)
 /* 引数　 なし                                                          */
 /* 戻り値 なし                                                          */
 /************************************************************************/
-// void Diff_Nomal(void)
-// {
-//     int i;
+void Diff_Nomal(void)
+{
+    int i;
 
-//     // センサー差分配列
-//     uint16_t sensDiff[7] = {
-//         anaSensUL_diff, anaSensLL_diff, anaSensCL_diff,
-//         anaSensCC_diff, anaSensCR_diff, anaSensRR_diff, anaSensUR_diff};
+    sensorMax = 600;
+    sensorMin = 300;
 
-//     // 最小・最大値（キャリブレーション結果）配列
-//     int sensMin[7] = {
-//         sensorMinUL, sensorMinLL, sensorMin,
-//         sensorMin, sensorMin, sensorMinRR, sensorMinUR};
+    // センサー差分配列
+    uint16_t sensDiff[5] = {
+        anaSensLL_diff, anaSensCL_diff,
+        anaSensCC_diff, anaSensCR_diff, anaSensRR_diff};
 
-//     int sensMax[7] = {
-//         sensorMaxUL, sensorMaxLL, sensorMax,
-//         sensorMax, sensorMax, sensorMaxRR, sensorMaxUR};
+    if (pattern <= 11)
+    {
+        for (int u = 0; u < 5; u++)
+        {
+            unsigned int sensorValue = sensDiff[u];
+            if (sensorValue > sensorMax)
+            {
+                sensorMax = sensorValue;
+                old_sensorMax = sensorValue;
+            }
+            if (sensorValue < sensorMin)
+            {
+                sensorMin = sensorValue;
+                old_sensorMin = sensorValue;
+            }
+        }
+    }
+    else
+    {
+        sensorMax = old_sensorMax;
+        sensorMin = old_sensorMin;
+    }
 
-//     for (i = 0; i < 7; i++)
-//     {
-//         // 差分の正規化（0~1の範囲）
-//         float norm = (float)(sensDiff[i] - sensMin[i]) / (float)(sensMax[i] - sensMin[i]);
+    for (i = 0; i < 5; i++)
+    {
+        // 差分の正規化（0~1の範囲）
+        float norm = (float)(sensDiff[i] - sensorMin) / (float)(sensorMax - sensorMin);
 
-//         // 0~1の範囲に制限（クランプ処理）
-//         if (norm < 0.0)
-//             norm = 0.0;
-//         if (norm > 1.0)
-//             norm = 1.0;
+        // 0~1の範囲に制限（クランプ処理）
+        if (norm < 0.0)
+            norm = 0.0;
+        if (norm > 1.0)
+            norm = 1.0;
 
-//         // 0~1000の範囲にスケール
-//         sensNormalized[i] = (uint16_t)(norm * 1000.0);
-//     }
-// }
+        // 0~1000の範囲にスケール
+        sensNormalized[i] = (uint16_t)(norm * 1000.0);
+    }
+}
 
 /************************************************************************/
 /* クロスライン検出処理                                                 */
@@ -2391,16 +2463,9 @@ int check_leftline(void)
 int getAnalogSensor(void)
 {
     int ret;
-    // if (pattern == 50 || pattern < 8)
-    // {
-    //     ret = (anaSensUL_diff) - (anaSensUR_diff); /* アナログセンサ情報取得    左大：＋ 　右大：-　  */
-    // }
-    // else
-    // {
     ret = (anaSensCL_diff) - (anaSensCR_diff); /* アナログセンサ情報取得    左大：＋ 　右大：-　  */
-    // }
 
-    return ret;
+    return ret/* - trace_offset*/;
 }
 
 /************************************************************************/
@@ -2500,8 +2565,8 @@ void servoControl(void)
     //  }
 
     /* サーボモータ用PWM値計算 */
-    iP = kp * i;                   /* 比例                         */
-    iD = kd * (iSensorBefore - i); /* 微分(目安はPの5～10倍)       */
+    iP = kp * i;                   // 比例
+    iD = kd * (iSensorBefore - i); // 微分(目安はPの5～10倍)
     iRet = iP - iD;
 
     iRet /= 64; //  <<1 :/2  <<2 :/4  <<3 :/8  <<4 :/16   <<5 :/32  <<6 :/64
@@ -2571,11 +2636,12 @@ void readDataFlashParameter(void)
         data_buff[START_TIME_ADDR] = 5;
         data_buff[PROP_GAIN_ADDR] = 4;
         data_buff[DIFF_GAIN_ADDR] = 14;
-        data_buff[TRG_SPEED_ADDR] = 60;
-        data_buff[CORNER_SPEED_ADDR] = 40;
-        data_buff[CRANK_SPEED_ADDR] = 35;
-        data_buff[LANE_SPEED_ADDR] = 42;
-        data_buff[SLOPE_SPEED_ADDR] = 20;
+        data_buff[TRG_SPEED_ADDR] = 52;
+        data_buff[CORNER_SPEED_ADDR] = 46;
+        data_buff[CRANK_SPEED_ADDR] = 29;
+        data_buff[LANE_SPEED_ADDR] = 43;
+        data_buff[SLOPE_SPEED_ADDR] = 36;
+        data_buff[ACCEL_SPEED_ADDR] = 100;
         // data_buff[LANE_ANGLE_L_ADDR]	= 35;
         // data_buff[LANE_ANGLE_R_ADDR]	= 35;
         // data_buff[SENS_L_THOLD1_ADDR]	= (450 >> 8) & 0xFF;
@@ -2606,6 +2672,7 @@ void writeDataFlashParameter(void)
     EEPROM.put(CRANK_SPEED_ADDR, data_buff[CRANK_SPEED_ADDR]);
     EEPROM.put(LANE_SPEED_ADDR, data_buff[LANE_SPEED_ADDR]);
     EEPROM.put(SLOPE_SPEED_ADDR, data_buff[SLOPE_SPEED_ADDR]);
+    EEPROM.put(ACCEL_SPEED_ADDR, data_buff[ACCEL_SPEED_ADDR]);
 }
 
 /************************************************************************/
@@ -3204,7 +3271,7 @@ int slopeCheck() // 坂検知
         }
     }
 
-    if (digiSensCC - (total_slope / 5) > SLOPE_UP_START)
+    if (anaSensCC_diff - (total_slope / 5) > SLOPE_UP_START)
     {
         slopeTotalCount++;
         return 1;
@@ -3339,9 +3406,9 @@ void LOG_rec(void)
     saveDataA[3][logCt] = lEncoderTotal - lEncoderBuff;
     saveDataA[4][logCt] = getServoAngle();
     saveDataA[5][logCt] = iSetAngle;
-    saveDataA[6][logCt] = anaSensLL_diff;
-    saveDataA[7][logCt] = anaSensCC_diff;
-    saveDataA[8][logCt] = anaSensRR_diff;
+    saveDataA[6][logCt] = sensNormalized[sLL];
+    saveDataA[7][logCt] = anaSensCC_diff; // sensNormalized[sCC]
+    saveDataA[8][logCt] = sensNormalized[sRR];
     saveDataA[9][logCt] = motor_buff_stare; //: PWMステアリング;
     saveDataA[10][logCt] = motor_buff_Fl;   //: PWM前左;
     saveDataA[11][logCt] = motor_buff_Rl;   //: PWM後左;
@@ -3492,7 +3559,7 @@ void Log_Analysis(void)
     // デバッグ出力
     char debugLine[64];
     sprintf(debugLine, "Latest log number: %d\n", latestLogNum);
-    Serial2.print(debugLine);
+    Serial.print(debugLine);
 
     // 最新のログファイルを開く
     char latestLogPath[64];
@@ -3501,7 +3568,7 @@ void Log_Analysis(void)
     // デバッグ出力
     char debugLine2[128];
     sprintf(debugLine2, "Opening log file: %s\n", latestLogPath);
-    Serial2.print(debugLine2);
+    Serial.print(debugLine2);
 
     microSD = SD.open(latestLogPath, FILE_READ);
     if (!microSD)
@@ -3514,11 +3581,11 @@ void Log_Analysis(void)
     // microSD変数で最新のログファイルが読み取り可能状態で開かれています
 
     char line[256];
-    char lineCopy[256]; // 文字列コピー用のバッファを追加
+    char lineCopy[256];  // 文字列コピー用のバッファを追加
     char *token;
     int lineCount = 0;
     uint16_t buff_pattern = 0;
-    float buff_angle = 0.0;
+    int16_t buff_angle = 0;
     uint16_t buff_distance = 0;
 
     // ストレート区間の解析用変数
@@ -3574,20 +3641,20 @@ void Log_Analysis(void)
         // デバッグ出力（コメントアウト解除で確認可能）
         char debugLine3[128];
         sprintf(debugLine3, "Line %d: %s\n", lineCount, line);
-        Serial2.print(debugLine3);
+        Serial.print(debugLine3);
 
         // ヘッダー行をスキップ（1行目）
         if (lineCount == 1)
         {
             // ヘッダー行の内容も確認
-            Serial2.print("CSV Header: ");
-            Serial2.println(line);
+            Serial.print("CSV Header: ");
+            Serial.println(line);
             continue;
         }
 
         // 変数を初期化
         buff_pattern = 0;
-        buff_angle = 0.0;
+        buff_angle = 0;
         buff_distance = 0;
 
         // lineの内容をlineCopyにコピー（strtokは元の文字列を変更するため）
@@ -3597,13 +3664,13 @@ void Log_Analysis(void)
         token = strtok(lineCopy, " ");
         int columnIndex = 0;
 
-        Serial2.print("Parsing columns: ");
+        Serial.print("Parsing columns: ");
         while (token != NULL)
         {
             // 各列の内容を確認
             char columnDebug[64];
             sprintf(columnDebug, "Col[%d]='%s' ", columnIndex, token);
-            Serial2.print(columnDebug);
+            Serial.print(columnDebug);
 
             // d_X=YYY形式から値を抽出
             if (strncmp(token, "d_", 2) == 0)
@@ -3611,22 +3678,22 @@ void Log_Analysis(void)
                 char *equalPos = strchr(token, '=');
                 if (equalPos != NULL)
                 {
-                    int dataIndex = atoi(token + 2);    // d_の後の数字
+                    int dataIndex = atoi(token + 2); // d_の後の数字
                     int dataValue = atoi(equalPos + 1); // =の後の数字
-
+                    
                     switch (dataIndex)
                     {
                     case 2: // d_2 = pattern列
                         buff_pattern = (uint16_t)dataValue;
-                        Serial2.print("(pattern) ");
+                        Serial.print("(pattern) ");
                         break;
-                    case 4:                            // d_4 = angle列 (整数値なので10で割る必要があるかもしれません)
-                        buff_angle = (float)dataValue; // 値によって調整が必要
-                        Serial2.print("(angle) ");
+                    case 4: // d_4 = angle列 (整数値なので10で割る必要があるかもしれません)
+                        buff_angle = (int16_t)dataValue;
+                        Serial.print("(angle) ");
                         break;
                     case 14: // d_14 = distance列
                         buff_distance = (uint16_t)dataValue;
-                        Serial2.print("(distance) ");
+                        Serial.print("(distance) ");
                         break;
                     }
                 }
@@ -3634,21 +3701,21 @@ void Log_Analysis(void)
             token = strtok(NULL, " ");
             columnIndex++;
         }
-        Serial2.println();
+        Serial.println();
 
         // 解析結果をデバッグ出力
         char debugLine4[128];
         sprintf(debugLine4, "Parsed -> Pattern: %u, Angle: %.2f, Distance: %u\n", buff_pattern, buff_angle, buff_distance);
-        Serial2.print(debugLine4);
+        Serial.print(debugLine4);
 
         // データが正しく取得できているかチェック
-        if (buff_pattern == 0 && buff_angle == 0.0 && buff_distance == 0)
+        if (buff_pattern == 0 && buff_angle == 0 && buff_distance == 0)
         {
-            Serial2.println("WARNING: All values are zero - check CSV format and column indices");
+            Serial.println("WARNING: All values are zero - check CSV format and column indices");
         }
 
         // pattern==11（通常トレース）でアングルがまっすぐの場合のストレート区間解析
-        if (buff_pattern == 11 && buff_angle >= -10.0 && buff_angle <= 10.0)
+        if (buff_pattern == 11 && buff_angle >= -20 && buff_angle <= 20)
         {
             if (!inStraight)
             {
@@ -3657,7 +3724,7 @@ void Log_Analysis(void)
                 straightStartDistance = buff_distance;
                 char debugLine5[64];
                 sprintf(debugLine5, "Straight start at: %u\n", straightStartDistance);
-                Serial2.print(debugLine5);
+                Serial.print(debugLine5);
             }
         }
         else
@@ -3668,7 +3735,7 @@ void Log_Analysis(void)
                 inStraight = false;
                 char debugLine6[128];
                 sprintf(debugLine6, "Straight end at: %u\nAcceleration section: %u,%u\n", buff_distance, straightStartDistance, buff_distance);
-                Serial2.print(debugLine6);
+                Serial.print(debugLine6);
 
                 char outputLine[64];
                 sprintf(outputLine, "%u,%u\n", straightStartDistance, buff_distance);
@@ -3683,7 +3750,7 @@ void Log_Analysis(void)
     {
         char debugLine7[64];
         sprintf(debugLine7, "Final straight end at: %u\n", buff_distance);
-        Serial2.print(debugLine7);
+        Serial.print(debugLine7);
         char outputLine[64];
         sprintf(outputLine, "%u,%u\n", straightStartDistance, buff_distance);
         outputFile.print(outputLine);
@@ -3691,13 +3758,150 @@ void Log_Analysis(void)
     }
 
     // 解析完了後、ファイルを閉じる
-    outputFile.close(); // 出力ファイルを確実にクローズ
-    microSD.close();    // 入力ファイルも確実にクローズ
+    outputFile.close();  // 出力ファイルを確実にクローズ
+    microSD.close();     // 入力ファイルも確実にクローズ
 
     CPU_LED_2 = OFF;
     CPU_LED_3 = OFF;
 
-    Serial2.println("Log analysis completed");
+    Serial.println("Log analysis completed");
+}
+
+void Open_Rep(void)
+{
+    // 通信速度Hz(e6=10の6乗),microSDのCS1(pins_arduino.hで定義)
+    if (!SD.begin(2.4e6, CS1))
+    {
+        Serial2.println("SD初期化に失敗しました");
+        return;
+    }
+
+    // repファイルのパス
+    const char *repDataDir = "REP";
+    char repFilePath[64];
+    sprintf(repFilePath, "%s/Log_Rep.csv", repDataDir);
+
+    // デバッグ出力
+    char debugLine[128];
+    sprintf(debugLine, "Opening rep file: %s\n", repFilePath);
+    Serial2.print(debugLine);
+
+    // repファイルの存在確認
+    if (!SD.exists(repFilePath))
+    {
+        Serial2.println("Repファイルが見つかりません");
+        straight_section_count = 0;
+        return;
+    }
+
+    // ファイルを開く
+    File repFile = SD.open(repFilePath, FILE_READ);
+    if (!repFile)
+    {
+        Serial2.println("Repファイルのオープンに失敗しました");
+        straight_section_count = 0;
+        return;
+    }
+
+    // 配列を初期化
+    straight_section_count = 0;
+    memset(straight_sections, 0, sizeof(straight_sections));
+
+    char line[64];
+    int lineCount = 0;
+
+    // CSVファイルを1行ずつ読み込み
+    while (repFile.available() && straight_section_count < MAX_STRAIGHT_SECTIONS)
+    {
+        // 1行読み込み
+        int i = 0;
+        while (repFile.available() && i < sizeof(line) - 1)
+        {
+            char c = repFile.read();
+            if (c == '\n')
+                break;
+            if (c != '\r') // CR文字は無視
+                line[i++] = c;
+        }
+        line[i] = '\0';
+
+        if (strlen(line) == 0)
+            continue;
+
+        lineCount++;
+
+        // ヘッダー行をスキップ（1行目：start_distance,end_distance）
+        if (lineCount == 1)
+        {
+            Serial2.print("CSV Header: ");
+            Serial2.println(line);
+            continue;
+        }
+
+        // データ行の解析（カンマ区切り）
+        char *token;
+        char lineCopy[64];
+        strcpy(lineCopy, line);
+
+        // start_distanceを取得
+        token = strtok(lineCopy, ",");
+        if (token != NULL)
+        {
+            straight_sections[straight_section_count].start_distance = (uint16_t)atoi(token);
+
+            // end_distanceを取得
+            token = strtok(NULL, ",");
+            if (token != NULL)
+            {
+                straight_sections[straight_section_count].end_distance = (uint16_t)atoi(token);
+
+                // デバッグ出力
+                char debugLine2[128];
+                sprintf(debugLine2, "Loaded section %d: start=%u, end=%u\n",
+                        straight_section_count,
+                        straight_sections[straight_section_count].start_distance,
+                        straight_sections[straight_section_count].end_distance);
+                Serial2.print(debugLine2);
+
+                straight_section_count++;
+            }
+        }
+    }
+
+    // ファイルを閉じる
+    repFile.close();
+
+    // // 読み込み結果のデバッグ出力
+    // char debugLine3[128];
+    // sprintf(debugLine3, "Rep file loaded successfully. Total sections: %d\n", straight_section_count);
+    // Serial2.print(debugLine3);
+
+    // // 全セクションの一覧表示（デバッグ用）
+    // Serial2.println("=== Loaded Straight Sections ===");
+    // for (int i = 0; i < straight_section_count; i++)
+    // {
+    //     char sectionInfo[64];
+    //     sprintf(sectionInfo, "Section %d: %u - %u (length: %u)\n",
+    //            i,
+    //            straight_sections[i].start_distance,
+    //            straight_sections[i].end_distance,
+    //            straight_sections[i].end_distance - straight_sections[i].start_distance);
+    //     Serial2.print(sectionInfo);
+    // }
+    // Serial2.println("=== End of Sections ===");
+}
+
+bool Check_StraightSection(uint16_t current_distance)
+{
+    for (int i = 0; i < straight_section_count; i++)
+    {
+        if (current_distance >= straight_sections[i].start_distance &&
+            current_distance <= straight_sections[i].end_distance - 1000)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 /************************************************************************/

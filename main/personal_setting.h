@@ -269,19 +269,17 @@
 #define THRESHOLD_H 1000 // アナログセンサ(0～1023)白判定しきい値  1000
 #define THRESHOLD_L 800  // アナログセンサ(0～1023)黒判定しきい値  800
 
-// #define THR_Sens 500    //白判定しきい値  800
-// #define thrSensBK 150   //黒判定しきい値  200
+#define THR_Sens 500    //白判定しきい値  800
+#define thrSensBK 150   //黒判定しきい値  200
 
 #define ON 1
 #define OFF 0 // 走行パラメータ
 
-#define sUL 0
-#define sLL 1
-#define sCL 2
-#define sCC 3
-#define sCR 4
-#define sRR 5
-#define sUR 6
+#define sLL 0
+#define sCL 1
+#define sCC 2
+#define sCR 3
+#define sRR 4
 
 #define STREAT_JUDGE_ANGLE 40
 #define CORNER_SPEED 65         // 未使用
@@ -291,11 +289,22 @@
 #define SLOPE_UP_SPEED 60       // 坂の上り速度 60= 4.0m/s
 #define SLOPE_DOWN_SPEED 60     // 坂の下り速度 60= 4.0m/s
 #define SLOPE_DOWN_SPEED 60     // 坂の下り速度 60= 4.0m/s
+
+
+
+#define MAX_STRAIGHT_SECTIONS 50  // 最大直線区間数（必要に応じて調整）
+typedef struct {
+  uint16_t start_distance;
+  uint16_t end_distance;
+} StraightSection;
+
+StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
+
 /*
  *	レーン角度
  */
-#define LANE_ANGLE_R 120 // 右レーンアングル 95
-#define LANE_ANGLE_L 120 // 左レーンアングル 95
+#define LANE_ANGLE_R 110 // 右レーンアングル 95
+#define LANE_ANGLE_L 110 // 左レーンアングル 95
 /*
  *	クランク角度
  */
@@ -321,7 +330,7 @@
 /*
  *	坂関連
  */
-#define SLOPE_UP_START 500   // 上り開始判定　200
+#define SLOPE_UP_START 500   // 上り開始判定　200  500
 
 /*
  *	内臓フラッシュ関連
@@ -340,6 +349,7 @@ typedef enum
   CRANK_SPEED_ADDR = 0x07,  // クランク進入速度
   LANE_SPEED_ADDR = 0x08,   // レーン進入速度
   SLOPE_SPEED_ADDR = 0x09,     // 坂感知閾値
+  ACCEL_SPEED_ADDR = 0x0A,     // 直線加速速度
   // LANE_ANGLE_L_ADDR	=		0x09,	// 左レーンアングル
   // LANE_ANGLE_R_ADDR	=		0x0A,	// 右レーンアングル
   // SENS_L_THOLD1_ADDR	=		0x0B,	// アナログセンサ左閾値(上位)
