@@ -199,6 +199,11 @@
     let allRows = [];
     let filteredRows = [];
     
+    // エンコーダ値を変換する関数
+    function convertEncoderValue(iEncoder) {
+      return (iEncoder / 100) * (0.02375*3.14159265) / 0.01;
+    }
+    
     function processLogFile(lines) {
       let lineNo = 0;
       lines.forEach(line => {
@@ -215,9 +220,13 @@
             const CC = ((d0 >> 1) & 1) ? '●' : '◯';
             const RR = ((d0 >> 0) & 1) ? '●' : '◯';
             
+            // エンコーダ値（インデックス1）を変換
+            const convertedEncoder = convertEncoderValue(rawValues[1]);
+            
             allRows.push({
               no: lineNo++,
-              values: [LL, CC, RR, ...rawValues.slice(1)],
+              values: [LL, CC, RR, convertedEncoder.toFixed(3), ...rawValues.slice(2)],
+              rawValues: rawValues, // 元の値も保持
               rawLine: line
             });
           }
@@ -253,9 +262,13 @@
               const CC = ((d0 >> 1) & 1) ? '●' : '◯';
               const RR = ((d0 >> 0) & 1) ? '●' : '◯';
               
+              // エンコーダ値（インデックス1）を変換
+              const convertedEncoder = convertEncoderValue(rawValues[1]);
+              
               allRows.push({
                 no: allRows.length,
-                values: [LL, CC, RR, ...rawValues.slice(1)],
+                values: [LL, CC, RR, convertedEncoder.toFixed(3), ...rawValues.slice(2)],
+                rawValues: rawValues,
                 rawLine: trimmedCell
               });
             }
@@ -292,9 +305,13 @@
           const CC = ((d0 >> 1) & 1) ? '●' : '◯';
           const RR = ((d0 >> 0) & 1) ? '●' : '◯';
           
+          // エンコーダ値（インデックス1）を変換
+          const convertedEncoder = convertEncoderValue(rawValues[1]);
+          
           allRows.push({
             no: lineNo,
-            values: [LL, CC, RR, ...rawValues.slice(1)],
+            values: [LL, CC, RR, convertedEncoder.toFixed(3), ...rawValues.slice(2)],
+            rawValues: rawValues,
             rawLine: line
           });
         }
@@ -415,19 +432,26 @@
         // 'RR ON': allRows.filter(r => r.values[2] === '●').length,
       };
       
-      // 数値列の統計
-      const numericColumns = [3/*, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13*/]; // エンコーダ以降
-      numericColumns.forEach(colIndex => {
-        const values = allRows.map(r => r.values[colIndex]).filter(v => typeof v === 'number');
-        if (values.length > 0) {
-          const avg = values.reduce((a, b) => a + b, 0) / values.length;
-          const max = Math.max(...values);
-        //   const min = Math.min(...values);
-          stats[`${columnNames[colIndex]} 平均`] = avg.toFixed(1);
-          stats[`${columnNames[colIndex]} 最大`] = max;
-        //   stats[`${columnNames[colIndex]} 最小`] = min;
-        }
-      });
+      // エンコーダ値の統計（変換後の値を使用）
+      const encoderValues = allRows.map(r => parseFloat(r.values[3])).filter(v => !isNaN(v));
+      if (encoderValues.length > 0) {
+        const avg = encoderValues.reduce((a, b) => a + b, 0) / encoderValues.length;
+        const max = Math.max(...encoderValues);
+        stats[`${columnNames[3]} 平均 m/s`] = avg.toFixed(3);
+        stats[`${columnNames[3]} 最大 m/s`] = max.toFixed(3);
+      }
+      
+      // 他の数値列の統計
+      // const numericColumns = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13]; // pattern以降
+      // numericColumns.forEach(colIndex => {
+      //   const values = allRows.map(r => r.values[colIndex]).filter(v => typeof v === 'number');
+      //   if (values.length > 0) {
+      //     const avg = values.reduce((a, b) => a + b, 0) / values.length;
+      //     const max = Math.max(...values);
+      //     stats[`${columnNames[colIndex]} 平均`] = avg.toFixed(1);
+      //     stats[`${columnNames[colIndex]} 最大`] = max;
+      //   }
+      // });
       
       return stats;
     }

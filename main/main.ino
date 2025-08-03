@@ -84,7 +84,7 @@ void LOG_rec(void);
 // 再生走行関係
 void Log_Analysis(void);
 void Open_Rep(void);
-bool Check_StraightSection(uint16_t current_distance);
+int Check_StraightSection(uint16_t current_distance);
 
 int straight_section_count = 0; // 実際に読み込まれた直線区間数
 
@@ -129,13 +129,13 @@ volatile uint16_t anaSensCL_off;
 volatile uint16_t anaSensLL_off;
 volatile uint16_t anaSensUL_off;
 // LED ON/OFFの差分
-volatile uint16_t anaSensUR_diff;
-volatile uint16_t anaSensRR_diff;
-volatile uint16_t anaSensCR_diff;
-volatile uint16_t anaSensCC_diff;
-volatile uint16_t anaSensCL_diff;
-volatile uint16_t anaSensLL_diff;
-volatile uint16_t anaSensUL_diff;
+volatile int16_t anaSensUR_diff;
+volatile int16_t anaSensRR_diff;
+volatile int16_t anaSensCR_diff;
+volatile int16_t anaSensCC_diff;
+volatile int16_t anaSensCL_diff;
+volatile int16_t anaSensLL_diff;
+volatile int16_t anaSensUL_diff;
 
 // 2値化用閾値
 volatile uint16_t thrSensUR;
@@ -433,7 +433,7 @@ void loop()
         if (digiSensLL == ON)
         {
             linellcount++;
-            if (linellcount > 45) // 45
+            if (linellcount > 50) // 45
             {
                 sensLLon = ON;
                 // CPU_LED_2 = ON;
@@ -449,7 +449,7 @@ void loop()
         if (digiSensRR == ON)
         {
             linerrcount++;
-            if (linerrcount > 45)
+            if (linerrcount > 50)
             {
                 sensRRon = ON;
                 // CPU_LED_2 = ON;
@@ -500,6 +500,7 @@ void loop()
             if (slopeCheck() && abs(getServoAngle()) < 8 && SLOPE_flag && !check_leftline() && !check_rightline() && !check_crossline())
             {
                 // 坂走行処理へ	のぼるくん
+                slopeTotalCount++;
                 pattern = 50;
                 lEncoderBuff = lEncoderTotal;
             }
@@ -540,8 +541,8 @@ void loop()
                 cnt1 = 0;
                 iAngle0 = VR_CENTER; // センター値固定
                 // iAngle0 = getServoAngle(); // 0度の位置記憶
-                pattern = 8; // ゲートセンサ無し （手押し）
-                // pattern = 3; // ゲートセンサ有り
+                // pattern = 8; // ゲート無し （手押し）
+                pattern = 5; // ゲート有り 3
 
                 // sensorMax = 800; // センサの最大値
                 // sensorMin = 300; // センサの最小値
@@ -564,112 +565,112 @@ void loop()
 
         // キャリブレーション
         case 2:
-            static int angle = 0;      // 現在のサーボ角度
-            static int Max_angle = 65; // 最大のサーボ角度
-            static int step = 1;       // サーボの移動
-            static int cycleCount = 0; // 首を振った回数
+            // static int angle = 0;      // 現在のサーボ角度
+            // static int Max_angle = 65; // 最大のサーボ角度
+            // static int step = 1;       // サーボの移動
+            // static int cycleCount = 0; // 首を振った回数
 
-            static float Judg_percent = 0.4;    // 閾値パーセント  0.4
-            static float Judg_BK_percent = 0.2; // 閾値パーセント
+            // static float Judg_percent = 0.4;    // 閾値パーセント  0.4
+            // static float Judg_BK_percent = 0.2; // 閾値パーセント
 
-            // iAngle0 = getServoAngle(); /* 0度の位置記憶 */
-            // iAngle0 = VR_CENTER; // センター値固定
-            iSetAngle = angle;
-            i = getServoAngle(); // ステアリング角度取得
-            servoPwmOut(iServoPwm2);
+            // // iAngle0 = getServoAngle();
+            // // iAngle0 = VR_CENTER; // センター値固定
+            // iSetAngle = angle;
+            // i = getServoAngle(); // ステアリング角度取得
+            // servoPwmOut(iServoPwm2);
 
-            if (cycleCount < 4)
-            {
-                if (cnt1 >= 6)
-                {
-                    // サーボ角度更新
-                    angle += step;
-                    if (angle > Max_angle || angle < -Max_angle)
-                    {
-                        step = -step; // 方向転換
-                        cycleCount++;
-                    }
+            // if (cycleCount < 4)
+            // {
+            //     if (cnt1 >= 6)
+            //     {
+            //         // サーボ角度更新
+            //         angle += step;
+            //         if (angle > Max_angle || angle < -Max_angle)
+            //         {
+            //             step = -step; // 方向転換
+            //             cycleCount++;
+            //         }
 
-                    int sensorValue = anaSensCC_diff;
-                    if (sensorValue > sensorMax)
-                        sensorMax = sensorValue;
-                    if (sensorValue < sensorMin)
-                        sensorMin = sensorValue;
+            //         int sensorValue = anaSensCC_diff;
+            //         if (sensorValue > sensorMax)
+            //             sensorMax = sensorValue;
+            //         if (sensorValue < sensorMin)
+            //             sensorMin = sensorValue;
 
-                    if (i > 0)
-                    {
-                        // RR値取得
-                        int sensorValueRR = anaSensRR_diff;
-                        if (sensorValueRR > sensorMaxRR)
-                            sensorMaxRR = sensorValueRR;
-                        else if (sensorValueRR < sensorMinRR)
-                            sensorMinRR = sensorValueRR;
-                        int sensorValueCR = anaSensCR_diff;
-                        if (sensorValueCR > sensorMaxCR)
-                            sensorMaxCR = sensorValueCR;
-                        else if (sensorValueCR < sensorMinCR)
-                            sensorMinCR = sensorValueCR;
-                    }
-                    else
-                    {
-                        // LL値取得
-                        int sensorValueLL = anaSensLL_diff;
-                        if (sensorValueLL > sensorMaxLL)
-                            sensorMaxLL = sensorValueLL;
-                        else if (sensorValueLL < sensorMinLL)
-                            sensorMinLL = sensorValueLL;
-                        int sensorValueCL = anaSensCL_diff;
-                        if (sensorValueCL > sensorMaxCL)
-                            sensorMaxCL = sensorValueCL;
-                        else if (sensorValueCL < sensorMinCL)
-                            sensorMinCL = sensorValueCL;
-                    }
-                    cnt1 = 0;
-                }
-            }
-            else
-            { // 片方向2回ずつ振る計4回
-                // 閾値計算
-                int threshold = (sensorMax - sensorMin) * Judg_percent; // CC閾値
-                // int thresholdRL = (((sensorMaxRR - sensorMinRR) + (sensorMaxLL - sensorMinLL)) / 2) * Judg_percent; // RR,LL閾値
-                int thresholdRR = (sensorMaxRR - sensorMinRR) * Judg_percent;                                        // RR閾値
-                int thresholdLL = (sensorMaxLL - sensorMinLL) * Judg_percent;                                        // LL閾値
-                int thresholdCRL = (((sensorMaxCR - sensorMinCR) + (sensorMaxCL - sensorMinCL)) / 2) * Judg_percent; // UR,UL閾値
-                // int thresholdUL = (sensorMaxUL - sensorMinUL) * Judg_percent; // UL閾値
-                int threshold_BK = (sensorMax - sensorMin) * Judg_BK_percent; // UR,UL閾値
+            //         if (i > 0)
+            //         {
+            //             // RR値取得
+            //             int sensorValueRR = anaSensRR_diff;
+            //             if (sensorValueRR > sensorMaxRR)
+            //                 sensorMaxRR = sensorValueRR;
+            //             else if (sensorValueRR < sensorMinRR)
+            //                 sensorMinRR = sensorValueRR;
+            //             int sensorValueCR = anaSensCR_diff;
+            //             if (sensorValueCR > sensorMaxCR)
+            //                 sensorMaxCR = sensorValueCR;
+            //             else if (sensorValueCR < sensorMinCR)
+            //                 sensorMinCR = sensorValueCR;
+            //         }
+            //         else
+            //         {
+            //             // LL値取得
+            //             int sensorValueLL = anaSensLL_diff;
+            //             if (sensorValueLL > sensorMaxLL)
+            //                 sensorMaxLL = sensorValueLL;
+            //             else if (sensorValueLL < sensorMinLL)
+            //                 sensorMinLL = sensorValueLL;
+            //             int sensorValueCL = anaSensCL_diff;
+            //             if (sensorValueCL > sensorMaxCL)
+            //                 sensorMaxCL = sensorValueCL;
+            //             else if (sensorValueCL < sensorMinCL)
+            //                 sensorMinCL = sensorValueCL;
+            //         }
+            //         cnt1 = 0;
+            //     }
+            // }
+            // else
+            // { // 片方向2回ずつ振る計4回
+            //     // 閾値計算
+            //     int threshold = (sensorMax - sensorMin) * Judg_percent; // CC閾値
+            //     // int thresholdRL = (((sensorMaxRR - sensorMinRR) + (sensorMaxLL - sensorMinLL)) / 2) * Judg_percent; // RR,LL閾値
+            //     int thresholdRR = (sensorMaxRR - sensorMinRR) * Judg_percent;                                        // RR閾値
+            //     int thresholdLL = (sensorMaxLL - sensorMinLL) * Judg_percent;                                        // LL閾値
+            //     int thresholdCRL = (((sensorMaxCR - sensorMinCR) + (sensorMaxCL - sensorMinCL)) / 2) * Judg_percent; // UR,UL閾値
+            //     // int thresholdUL = (sensorMaxUL - sensorMinUL) * Judg_percent; // UL閾値
+            //     int threshold_BK = (sensorMax - sensorMin) * Judg_BK_percent; // UR,UL閾値
 
-                // thrSensUR = thresholdU;
-                thrSensRR = thresholdRR;
-                thrSensCR = thresholdCRL;
-                thrSensCC = threshold;
-                thrSensCL = thresholdCRL;
-                thrSensLL = thresholdLL;
-                // thrSensUL = thresholdU;
-                // thrSensBK = threshold_BK;
+            //     // thrSensUR = thresholdU;
+            //     thrSensRR = thresholdRR;
+            //     thrSensCR = thresholdCRL;
+            //     thrSensCC = threshold;
+            //     thrSensCL = thresholdCRL;
+            //     thrSensLL = thresholdLL;
+            //     // thrSensUL = thresholdU;
+            //     // thrSensBK = threshold_BK;
 
-                angle = 0;
-                // servoPwmOut(iServoPwm2 / 3);
+            //     angle = 0;
+            //     // servoPwmOut(iServoPwm2 / 3);
 
-                if (i == 0)
-                {
-                    pattern = 8; // 手押し
-                    // pattern = 3; // STARTbar
-                    // pattern = 1;
-                    START_flag = false;
-                    cnt1 = 0;
-                    cnt2 = 0;
-                    step = 0;
-                    cycleCount = 0;
-                    break;
-                }
-            }
+            //     if (i == 0)
+            //     {
+            //         pattern = 8; // 手押し
+            //         // pattern = 3; // STARTbar
+            //         // pattern = 1;
+            //         START_flag = false;
+            //         cnt1 = 0;
+            //         cnt2 = 0;
+            //         step = 0;
+            //         cycleCount = 0;
+            //         break;
+            //     }
+            // }
 
             break;
 
             // オートセット開始
         case 3:
             servoPwmOut(iServoPwm / 2);
-            if (pushsw_get())
+            if (pushsw_get() && sensRRon == OFF)
             {
                 if (digiSensRR == ON || digiSensLL == ON) // キャリブレーション失敗
                     pattern = 1;                          // キャリブレーションやり直し
@@ -681,7 +682,7 @@ void loop()
 
             if (START_flag)
             {
-                if (digiSensRR == ON)
+                if (sensRRon == ON) // スタートバー発見
                 {
                     pattern = 4;
                     break;
@@ -689,6 +690,7 @@ void loop()
                 else
                 {
                     motor_f(20, 20);
+                    // motor_r(20, 20);
                 }
             }
             // else
@@ -700,10 +702,12 @@ void loop()
             break;
 
         case 4:
+            iSetAngle = 0;
             servoPwmOut(0);
             if (digiSensLL == OFF && digiSensRR == OFF)
             {
                 motor_f(0, 0);
+                motor_r(0, 0);
                 pattern = 5;
                 break;
             }
@@ -764,7 +768,7 @@ void loop()
                     pattern = 1;                                               // キャリブレーションやり直し
                 else
                 {
-                    // iAngle0 = getServoAngle(); /* 0度の位置記憶 */
+                    // iAngle0 = getServoAngle();
                     // iAngle0 = VR_CENTER; // センター値固定
                     CPU_LED_2 = OFF;
                     cnt1 = 0;
@@ -818,7 +822,7 @@ void loop()
             motor_f(0, 0);
             motor_r(0, 0);
             iSetAngle = 0;
-            servoPwmOut(iServoPwm / 2);
+            servoPwmOut(iServoPwm2 / 8);
             if (cnt2 < 100)
             {
                 CPU_LED_2 = ON;
@@ -839,15 +843,29 @@ void loop()
             if (cnt1 > data_buff[START_TIME_ADDR] * 1000)
             {
                 LcdPosition(0, 0);
-                LcdPrintf("case 11");
+                // LcdPrintf("case 11");
                 // iAngle0 = getServoAngle(); /* 0度の位置記憶 */
                 SLOPE_flag = false;
-                pattern = 11;
+                // エンコーダ関係初期化
+                lEncoderBuff = 0;
+                lEncoderTotal = 0;
+                pattern = 10;
                 cnt1 = 0;
                 saveFlag = true; // データ保存開始
                 check_sen_cnt = 0;
                 check_enc_cnt = 0;
             }
+            break;
+
+        case 10:
+            iSetAngle = 0;
+            // servoPwmOut(iServoPwm2 / 8);
+            servoPwmOut(0);
+            motor_f(100, 100);
+            motor_r(80, 80);
+            if (lEncoderTotal >= 150)
+                pattern = 11;
+
             break;
 
             /*
@@ -899,13 +917,17 @@ void loop()
             {
                 if (Cheat_flag)
                 {
-                    if (Check_StraightSection(lEncoderTotal))
+                    if (Check_StraightSection(lEncoderTotal) == ACCEL)
                     {
-                        PDtrace_Control(i, 80);
+                        PDtrace_Control(i, 89);
+                    }
+                    else if (Check_StraightSection(lEncoderTotal) == BRAKE)
+                    {
+                        PDtrace_Control(i, data_buff[CORNER_SPEED_ADDR]);
                     }
                     else
                     {
-                        PDtrace_Control(i, data_buff[CORNER_SPEED_ADDR]);
+                        PDtrace_Control(i, data_buff[TRG_SPEED_ADDR]);
                     }
                 }
                 else
@@ -1008,8 +1030,8 @@ void loop()
                 iSetAngle = CRANK_ANGLE_L; /* +で左 -で右に曲がります      */
                 servoPwmOut(iServoPwm2);
 
-                motor_f(-70, -1); // 前 （左,右）
-                motor_r(-40, -1); // 後モータ（左,右）
+                motor_f(0, 55);    // 前 （左,右）
+                motor_r(-60, -40); // 後モータ（左,右）
             }
 
             else if (crankDirection == 'R')
@@ -1017,8 +1039,8 @@ void loop()
                 iSetAngle = -CRANK_ANGLE_R; /* +で左 -で右に曲がります      */
                 servoPwmOut(iServoPwm2);
 
-                motor_f(-1, -70); // 前 （左,右）
-                motor_r(-1, -40); // 後モータ（左,右）
+                motor_f(55, 0);    // 前 （左,右）
+                motor_r(-40, -60); // 後モータ（左,右）
             }
 
             if ((digiSensCC == OFF && digiSensLL == OFF && digiSensRR == OFF) || (lEncoderTotal - lEncoderBuff) >= 75) // 75
@@ -1039,51 +1061,51 @@ void loop()
                 iSetAngle = CRANK_ANGLE_L; /* +で左 -で右に曲がります      */
                 servoPwmOut(iServoPwm2);
 
-                motor_f(-70, -1); // 前 （左,右）
-                motor_r(-40, -1); // 後モータ（左,右）
+                motor_f(30, 55);   // 前 （左,右）
+                motor_r(-60, -40); // 後モータ（左,右）
 
                 if (sensRRon == ON)
                 {
-                    pattern = 112;    //(通常クランクの処理へ)　ﾌﾛﾝﾄ右ｾﾝｻ(out)反応時
-                    cnt1 = 0;         // 116:20ms待ち
-                    motor_f(-20, 1);  // 前 （左,右）1,1
-                    motor_r(-50, 20); // 後モータ（左,右）
+                    pattern = 112; //(通常クランクの処理へ)　ﾌﾛﾝﾄ右ｾﾝｻ(out)反応時
+                    cnt1 = 0;      // 116:20ms待ち
+                    // motor_f(-20, 1);  // 前 （左,右）1,1
+                    // motor_r(-50, 20); // 後モータ（左,右）
                     break;
                 }
 
-                if (sensLLon == ON && anaSensLL_diff < thrSensBK && (lEncoderTotal - lEncoderBuff) >= 100) // 75
-                {
-                    pattern = 131; //(低速進入時処理)　ﾌﾛﾝﾄ左ｾﾝｻ(in)反応時
-                    cnt1 = 0;
-                    break;
-                    // （左,右） motor_f(1,1);
-                    // //前 （左,右）
-                    // motor_r(-40,1);
-                }
+                // if (sensLLon == ON && anaSensLL_diff < thrSensBK && (lEncoderTotal - lEncoderBuff) >= 100) // 75
+                // {
+                //     pattern = 131; //(低速進入時処理)　ﾌﾛﾝﾄ左ｾﾝｻ(in)反応時
+                //     cnt1 = 0;
+                //     break;
+                //     // （左,右） motor_f(1,1);
+                //     // //前 （左,右）
+                //     // motor_r(-40,1);
+                // }
             }
             else if (crankDirection == 'R')
             {                               // クランク方向　右
                 iSetAngle = -CRANK_ANGLE_R; /* +で左 -で右に曲がります      */
                 servoPwmOut(iServoPwm2);
 
-                motor_f(-1, -70); // 前 （左,右）
-                motor_r(-1, -40); // 後モータ（左,右）
+                motor_f(55, 30);   // 前 （左,右）
+                motor_r(-40, -60); // 後モータ（左,右）
 
                 if (sensLLon == ON)
                 {
-                    pattern = 112;    //(通常クランクの処理へ) ﾌﾛﾝﾄ左ｾﾝｻ(out)反応時
-                    motor_f(1, -20);  // 前 （左,右）1,1
-                    motor_r(20, -50); // 後モータ（左,右）
-                    cnt1 = 0;         // 116:20ms待ち
+                    pattern = 112; //(通常クランクの処理へ) ﾌﾛﾝﾄ左ｾﾝｻ(out)反応時
+                    // motor_f(1, -20);  // 前 （左,右）1,1
+                    // motor_r(20, -50); // 後モータ（左,右）
+                    cnt1 = 0; // 116:20ms待ち
                     break;
                 }
 
-                if (sensRRon == ON && /*anaSensCR_diff < thrSensBK &&*/ (lEncoderTotal - lEncoderBuff) >= 100) // 要件等 75
-                {
-                    pattern = 131; //(低速進入時処理)　ﾌﾛﾝﾄ右ｾﾝｻ(in)反応時
-                    cnt1 = 0;
-                    break;
-                }
+                // if (sensRRon == ON && /*anaSensCR_diff < thrSensBK &&*/ (lEncoderTotal - lEncoderBuff) >= 100) // 要件等 75
+                // {
+                //     pattern = 131; //(低速進入時処理)　ﾌﾛﾝﾄ右ｾﾝｻ(in)反応時
+                //     cnt1 = 0;
+                //     break;
+                // }
             }
             break;
 
@@ -1093,18 +1115,8 @@ void loop()
 
                 iSetAngle = CRANK_ANGLE_L; /* +で左 -で右に曲がります      */
                 servoPwmOut(iServoPwm2);
-
-                //					motor_f(1,1);
-                ////前
-                // （左,右）
-                // motor_r(-40,1);
-                // //後モータ（左,右） 			motor_f(-50,1);
-                // //前 （左,右）
-                // motor_r(-60,30);
-                // //後モータ（左,右）
-
-                motor_f(1, 1);    // 前 （左,右）
-                motor_r(-50, 10); // 後モータ（左,右）
+                motor_f(30, 50);   // 前 （左,右）
+                motor_r(-60, -25); // 後モータ（左,右）
 
                 // 通常クランク処理
                 // ﾌﾛﾝﾄのﾃﾞｼﾞﾀﾙｾﾝｻ全て黒（右センサＯＦＦ）の時次の処理へ　　（センサー拡張のため　左センサー反応時を除く）
@@ -1119,14 +1131,8 @@ void loop()
 
                 iSetAngle = -CRANK_ANGLE_R; /* +で左 -で右に曲がります      */
                 servoPwmOut(iServoPwm2);
-
-                //					motor_f(1,a1);
-                ////前
-                // （左,右）
-                // motor_r(1,-40);
-                // //後モータ（左,右）
-                motor_f(1, 1);    // 前 （左,右）
-                motor_r(10, -50); // 後モータ（左,右）
+                motor_f(50, 30);   // 前 （左,右）
+                motor_r(-25, -60); // 後モータ（左,右）
 
                 // 通常クランク処理
                 // ﾌﾛﾝﾄのﾃﾞｼﾞﾀﾙｾﾝｻ全て黒（左センサＯＦＦ）の時次の処理へ　（センサー拡張のため　左センサー反応時を除く）
@@ -1177,8 +1183,8 @@ void loop()
             {                              // クランク方向　左
                 iSetAngle = CRANK_ANGLE_L; /* +で左 -で右に曲がります      */
                 servoPwmOut(iServoPwm2);
-                motor_f(100, 70); // 前 （左,右)(100,70) (30, 0)
-                motor_r(50, 60);  // 後モータ(左,右)
+                motor_f(30, 40); // 前 （左,右)(100,70) (30, 0)
+                motor_r(-40, 0); // 後モータ(左,右)
 
                 if (sensLLon == ON /*&& anaSensCL_diff < thrSensCL*/)
                 {
@@ -1201,8 +1207,8 @@ void loop()
 
                 iSetAngle = -CRANK_ANGLE_R; /* +で左 -で右に曲がります      */
                 servoPwmOut(iServoPwm2);
-                motor_f(70, 100); // 前 （左,右）(70,100) (0, 30)
-                motor_r(60, 50);  // 後モータ（左,右)
+                motor_f(40, 30); // 前 （左,右）(70,100) (0, 30)
+                motor_r(0, -40); // 後モータ（左,右)
 
                 if (sensRRon == ON /*&& anaSensCR_diff < thrSensCR*/)
                 {
@@ -1350,14 +1356,17 @@ void loop()
             /************************************************************************/
             /* レーンチェンジの処理*/
             /************************************************************************/
-        case 151:                   // ハーフライン後の処理１（速度制御）
-            servoPwmOut(iServoPwm); // ライントレース制御 motor_r(80, 80);
-            // motor_f(60, 60);
-            // motor_r(60, 60);
+        case 151: // ハーフライン後の処理１（速度制御）
+
+            if (digiSensLL == ON || digiSensRR == ON) // 左右に振られる対処
+                servoPwmOut(0);
+            else
+                servoPwmOut(iServoPwm); // ライントレース制御 motor_r(80, 80);
+
             PDtrace_Control(i, data_buff[LANE_SPEED_ADDR]);
             crankMode = 1; // ステアリング制御補正なし
 
-            if (check_crossline())
+            if (check_crossline() || (digiSensLL == ON && digiSensCC == ON && digiSensRR == ON))
             { /* クロスラインチェック         */
                 cnt1 = 0;
                 crankMode = 1;
@@ -1366,9 +1375,8 @@ void loop()
                 break;
             }
 
-            // if (cnt1 > 10)
-            if (lEncoderTotal - lEncoderBuff > 60)
-            { // 50mm
+            if (lEncoderTotal - lEncoderBuff > 200) // 60
+            {                                       // 50mm
                 lEncoderBuff = lEncoderTotal;
                 pattern = 152;
                 break;
@@ -1379,6 +1387,8 @@ void loop()
             i = getServoAngle(); // ステアリング角度取得
             servoPwmOut(iServoPwm);
             PDtrace_Control(i, data_buff[LANE_SPEED_ADDR]);
+            // motor_f(50, 50);
+            // motor_r(50, 50);
             /*
                   if (iEncoder >= data_buff[LANE_SPEED_ADDR] + 3)
                   { // エンコーダによりスピード制御
@@ -1399,7 +1409,7 @@ void loop()
             // if (digiSensRR == OFF && digiSensLL == OFF && digiSensCC == OFF && anaSensCL_diff < thrSensCL && anaSensCR_diff < thrSensCR)
             if (digiSensCL == OFF && digiSensCC == OFF && digiSensCR == OFF)
             {
-                pattern = 154; // 全てのセンサ　黒検出時次の処理へ
+                pattern = 154; // 全てのセンサ黒検出時次の処理へ
                 // trace_offset = 0;
             }
 
@@ -1426,39 +1436,37 @@ void loop()
             if (laneDirection == 'L')
             { // レーン方向　左
 
-                iSetAngle = LANE_ANGLE_L; /* +で左 -で右に曲がります */
-                servoPwmOut(iServoPwm2);  // 2角度制御 3:割込制御無
-                motor_f(-70, 25);         // 前 （左,右-70）
-                motor_r(-30, 10);         // 後（左,右-30)
+                iSetAngle = LANE_ANGLE_L; // +で左 -で右に曲がります
+                servoPwmOut(iServoPwm2);  //
+                motor_f(10, 10);          // 前 （左,右-70,25）
+                motor_r(-50, 50);         // 後（左,右-30,10)
 
-                if ((LANE_ANGLE_L)-5 < abs(i))
-                {
-                    pattern = 155; // ステアリング角度目標値付近
-                    break;
-                }
+                // if ((LANE_ANGLE_L)-5 < abs(i))
+                // {
+                //     pattern = 155; // ステアリング角度目標値付近
+                //     break;
+                // }
 
-                if (digiSensCL == ON)
+                if (sensLLon == ON) // digiSensCL
                 {
                     cnt1 = 0;
                     pattern = 156;
                 }
             }
             else if (laneDirection == 'R')
-            { // レーン方向　右
-                iSetAngle = -LANE_ANGLE_R;
+            {                              // レーン方向　右
+                iSetAngle = -LANE_ANGLE_R; // +で左 -で右に曲がります
+                servoPwmOut(iServoPwm2);   //
+                motor_f(10, 10);           // 前 （左,右25,-70）
+                motor_r(50, -50);          // 後（左,右10,-30)
 
-                /* +で左 -で右に曲がります */
-                servoPwmOut(iServoPwm2); // 2角度制御 3:割込制御無
-                motor_f(25, -70);        // 前 （左,右-70）
-                motor_r(10, -30);        // 後（左,右-30)
+                // if ((LANE_ANGLE_R)-5 < abs(i))
+                // {
+                //     pattern = 155; // ステアリング角度目標値付近
+                //     break;
+                // }
 
-                if ((LANE_ANGLE_R)-5 < abs(i))
-                {
-                    pattern = 155; // ステアリング角度目標値付近
-                    break;
-                }
-
-                if (digiSensCR == ON)
+                if (sensRRon == ON) // digiSensCR
                 {
                     cnt1 = 0;
                     pattern = 156;
@@ -1474,10 +1482,10 @@ void loop()
 
                 iSetAngle = LANE_ANGLE_L; /* +で左 -で右に曲がります */
                 servoPwmOut(iServoPwm2);  // 2角度制御 3:割込制御無
-                motor_f(70, 70);          // 前 （左,右-70）
-                motor_r(1, 1);            // 後（左,右-30)
+                motor_f(10, 10);          // 前 （左,右 70）
+                motor_r(70, 70);          // 後（左,右 -30)
 
-                if (digiSensCL == ON)
+                if (digiSensCR == ON) // CL
                 {
                     cnt1 = 0;
                     pattern = 156;
@@ -1487,10 +1495,10 @@ void loop()
             {                              // レーン方向　右
                 iSetAngle = -LANE_ANGLE_R; /* +で左 -で右に曲がります */
                 servoPwmOut(iServoPwm2);   // 2角度制御 3:割込制御無
-                motor_f(70, 70);           // 前 （左,右-70）
-                motor_r(1, 1);             // 後（左,右-30)
+                motor_f(10, 10);           // 前 （左,右 70）
+                motor_r(70, 70);           // 後（左,右 -30)
 
-                if (digiSensCR == ON)
+                if (digiSensCL == ON) // CR
                 {
                     cnt1 = 0;
                     pattern = 156;
@@ -1503,16 +1511,16 @@ void loop()
             {                             // レーン方向　左
                 iSetAngle = LANE_ANGLE_L; /* +で左 -で右に曲がります */
                 servoPwmOut(iServoPwm2);  // 角度制御
-                motor_f(85, 0);           // 前 （左,右）
-                motor_r(85, 0);           // 後（左,右)
+                motor_f(60, 10);          // 前 （左,右 85,0）
+                motor_r(60, 10);          // 後 （左,右 85,0)
             }
 
             else if (laneDirection == 'R')
             {                              // レーン方向　右
                 iSetAngle = -LANE_ANGLE_L; /* +で左 -で右に曲がります */
                 servoPwmOut(iServoPwm2);   // 角度制御
-                motor_f(0, 85);            // 前 （左,右）
-                motor_r(0, 85);            // 後（左,右)
+                motor_f(10, 60);           // 前 （左,右）
+                motor_r(10, 60);           // 後（左,右)
             }
 
             if (cnt1 >= 5)
@@ -1528,10 +1536,10 @@ void loop()
 
                 iSetAngle = LANE_ANGLE_L; /* +で左 -で右に曲がります */
                 servoPwmOut(iServoPwm2);  // 2角度制御 3:割込制御無
-                motor_f(85, 0);           // 前 （左,右）
-                motor_r(85, 0);           // 後（左,右)
+                motor_f(10, 10);          // 前 （左,右）
+                motor_r(85, 30);          // 後（左,右)
 
-                if (digiSensCL == ON)
+                if (digiSensCC == ON) // CL
                 {
                     cnt1 = 0;
                     pattern = 162; /*左デジタルセンサ反応時次の処理へ */
@@ -1541,10 +1549,10 @@ void loop()
             {                              // レーン方向　右
                 iSetAngle = -LANE_ANGLE_L; /* +で左 -で右に曲がります */
                 servoPwmOut(iServoPwm2);   // 2角度制御 3:割込制御無
-                motor_f(0, 85);            // 前 （左,右）
-                motor_r(0, 85);            // 後（左,右)
+                motor_f(10, 10);           // 前 （左,右）
+                motor_r(30, 85);           // 後（左,右)
 
-                if (digiSensCR == ON)
+                if (digiSensCC == ON) // CR
                 {
                     cnt1 = 0;
                     pattern = 162; /*左デジタルセンサ反応時次の処理へ */
@@ -1557,15 +1565,15 @@ void loop()
             {                             // レーン方向　左
                 iSetAngle = LANE_ANGLE_L; /* +で左 -で右に曲がります */
                 servoPwmOut(iServoPwm2);  // 2角度制御 3:割込制御無
-                motor_f(85, 0);           // 前 （左,右）
-                motor_r(85, 0);           // 後（左,右)
+                motor_f(85, 20);          // 前 （左,右）
+                motor_r(85, 20);          // 後（左,右)
             }
             else if (laneDirection == 'R')
             {                              // レーン方向　右
                 iSetAngle = -LANE_ANGLE_L; /* +で左 -で右に曲がります */
                 servoPwmOut(iServoPwm2);   // 2角度制御 3:割込制御無
-                motor_f(0, 85);            // 前 （左,右）
-                motor_r(0, 85);            // 後（左,右)
+                motor_f(20, 85);           // 前 （左,右）
+                motor_r(20, 85);           // 後（左,右)
             }
 
             if (cnt1 >= 10)
@@ -1580,12 +1588,12 @@ void loop()
             {                             // レーン方向　左
                 iSetAngle = LANE_ANGLE_L; /* +で左 -で右に曲がります */
                 servoPwmOut(iServoPwm2);  // 2角度制御 3:割込制御無
-                motor_f(85, 0);           // 前 （左,右）
-                motor_r(85, 0);           // 後（左,右)
+                motor_f(85, 20);          // 前 （左,右）
+                motor_r(85, 20);          // 後（左,右)
 
-                if (digiSensRR == ON)
+                if (sensRRon == ON)
                 {
-                    pattern = 166; /*左デジタルセンサOFF反応時次の処理へ */
+                    pattern = 166;
                     cnt1 = 0;
                 }
             }
@@ -1594,12 +1602,12 @@ void loop()
             {                              // レーン方向　右
                 iSetAngle = -LANE_ANGLE_L; /* +で左 -で右に曲がります */
                 servoPwmOut(iServoPwm2);   // 2角度制御 3:割込制御無
-                motor_f(0, 85);            // 前 （左,右）
-                motor_r(0, 85);            // 後（左,右)
+                motor_f(20, 85);           // 前 （左,右）
+                motor_r(20, 85);           // 後（左,右)
 
-                if (digiSensLL == ON)
+                if (sensLLon == ON)
                 {
-                    pattern = 166; /*左デジタルセンサOFF反応時次の処理へ */
+                    pattern = 166;
                     cnt1 = 0;
                 }
             }
@@ -1607,11 +1615,11 @@ void loop()
 
         case 166: // 最内センサ　黒反応後の処理（大カウンター）　最内センサ　白反応時待ち
             if (laneDirection == 'L')
-            {                                                                   // レーン方向　左
-                iSetAngle = -(LANE_ANGLE_L - 50); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
-                servoPwmOut(iServoPwm2);                                        // 2角度制御 3:割込制御無
-                motor_f(90, 80);                                                // 前 （左,右）
-                motor_r(90, 0);                                                 // 後（左,右)
+            {                                     // レーン方向　左
+                iSetAngle = -(LANE_ANGLE_L - 76); // カウンター　
+                servoPwmOut(iServoPwm2);          // 2角度制御 3:割込制御無
+                motor_f(90, 80);                  // 前 （左,右）
+                motor_r(90, 10);                  // 後（左,右)
                 if (sensRRon == ON && cnt1 >= 10)
                 {
                     pattern = 168;
@@ -1622,11 +1630,11 @@ void loop()
                 }
             }
             else if (laneDirection == 'R')
-            {                                                                  // レーン方向　右　カウンター処理
-                iSetAngle = (LANE_ANGLE_L - 50); /* +で左 -で右に曲がります */ // カウンターなので逆に振る　
-                servoPwmOut(iServoPwm2);                                       // 2角度制御 3:割込制御無
-                motor_f(80, 90);                                               // 前 （左,右）
-                motor_r(0, 90);                                                // 後（左,右)
+            {                                    // レーン方向　右　カウンター処理
+                iSetAngle = (LANE_ANGLE_L - 76); // カウンター
+                servoPwmOut(iServoPwm2);         // 2角度制御 3:割込制御無
+                motor_f(80, 90);                 // 前 （左,右）
+                motor_r(10, 90);                 // 後（左,右)
                 if (sensLLon == ON && cnt1 >= 10)
                 {
                     pattern = 168;
@@ -1645,7 +1653,7 @@ void loop()
                 // iSetAngle = -LANE_ANGLE_L; /* +で左 -で右に曲がります */
                 servoPwmOut(iServoPwm2); // 2角度制御 3:割込制御無
                 motor_f(90, 80);         // 前 （左,右）
-                motor_r(90, 0);          // 後（左,右)
+                motor_r(90, 10);         // 後（左,右)
             }
 
             else if (laneDirection == 'R')
@@ -1653,7 +1661,7 @@ void loop()
                 // iSetAngle = LANE_ANGLE_R; /* +で左 -で右に曲がります */
                 servoPwmOut(iServoPwm2); // 2角度制御 3:割込制御無
                 motor_f(80, 90);         // 前 （左,右）
-                motor_r(0, 90);          // 後（左,右)
+                motor_r(10, 90);         // 後（左,右)
             }
 
             if (digiSensCC == ON && abs(anaSensCL_diff - anaSensCR_diff) < 100)
@@ -2030,7 +2038,7 @@ void timerCallback(timer_callback_args_t __attribute((unused)) * p_args)
             }
 
             /* 脱輪時の停止処理（ロータリエンコーダ） */
-            if (iEncoder <= 1 && !(dipsw_get() & 0x01))
+            if (iEncoder <= 2 && !(dipsw_get() & 0x01))
             {
                 check_enc_cnt++;
                 if (check_enc_cnt >= 1000) // 2000
@@ -2331,7 +2339,7 @@ void Diff_Nomal(void)
         anaSensLL_diff, anaSensCL_diff,
         anaSensCC_diff, anaSensCR_diff, anaSensRR_diff};
 
-    if (pattern <= 11)
+    if (pattern < 152 /*&& pattern >= 10) || pattern < 3*/)
     {
         for (int u = 0; u < 5; u++)
         {
@@ -2339,12 +2347,14 @@ void Diff_Nomal(void)
             if (sensorValue > sensorMax)
             {
                 sensorMax = sensorValue;
-                old_sensorMax = sensorValue;
+                if (pattern < 152)
+                    old_sensorMax = sensorValue;
             }
             if (sensorValue < sensorMin)
             {
                 sensorMin = sensorValue;
-                old_sensorMin = sensorValue;
+                if (pattern < 152)
+                    old_sensorMin = sensorValue;
             }
         }
     }
@@ -2362,8 +2372,8 @@ void Diff_Nomal(void)
         // 0~1の範囲に制限（クランプ処理）
         if (norm < 0.0)
             norm = 0.0;
-        if (norm > 1.0)
-            norm = 1.0;
+        if (norm > 0.6)
+            norm = 0.6;
 
         // 0~1000の範囲にスケール
         sensNormalized[i] = (uint16_t)(norm * 1000.0);
@@ -2465,7 +2475,7 @@ int getAnalogSensor(void)
     int ret;
     ret = (anaSensCL_diff) - (anaSensCR_diff); /* アナログセンサ情報取得    左大：＋ 　右大：-　  */
 
-    return ret/* - trace_offset*/;
+    return ret /* - trace_offset*/;
 }
 
 /************************************************************************/
@@ -2600,8 +2610,8 @@ void servoControl2(void)
     j = getServoAngle();
 
     /* サーボモータ用PWM値計算 */
-    iP = 10 * (j - i);             /* 比例                         */
-    iD = 60 * (iAngleBefore2 - j); /* 微分(目安はPの5～10倍)       */
+    iP = 10 * (j - i);             // 比例 10
+    iD = 50 * (iAngleBefore2 - j); // 微分(目安はPの5～10倍) 60
     iRet = iP - iD;
     iRet /= 2;
 
@@ -3273,7 +3283,6 @@ int slopeCheck() // 坂検知
 
     if (anaSensCC_diff - (total_slope / 5) > SLOPE_UP_START)
     {
-        slopeTotalCount++;
         return 1;
     }
     else
@@ -3581,7 +3590,7 @@ void Log_Analysis(void)
     // microSD変数で最新のログファイルが読み取り可能状態で開かれています
 
     char line[256];
-    char lineCopy[256];  // 文字列コピー用のバッファを追加
+    char lineCopy[256]; // 文字列コピー用のバッファを追加
     char *token;
     int lineCount = 0;
     uint16_t buff_pattern = 0;
@@ -3678,9 +3687,9 @@ void Log_Analysis(void)
                 char *equalPos = strchr(token, '=');
                 if (equalPos != NULL)
                 {
-                    int dataIndex = atoi(token + 2); // d_の後の数字
+                    int dataIndex = atoi(token + 2);    // d_の後の数字
                     int dataValue = atoi(equalPos + 1); // =の後の数字
-                    
+
                     switch (dataIndex)
                     {
                     case 2: // d_2 = pattern列
@@ -3715,7 +3724,7 @@ void Log_Analysis(void)
         }
 
         // pattern==11（通常トレース）でアングルがまっすぐの場合のストレート区間解析
-        if (buff_pattern == 11 && buff_angle >= -20 && buff_angle <= 20)
+        if (buff_pattern == 11 && buff_angle >= -ACCEL_ANGLE && buff_angle <= ACCEL_ANGLE)
         {
             if (!inStraight)
             {
@@ -3758,8 +3767,8 @@ void Log_Analysis(void)
     }
 
     // 解析完了後、ファイルを閉じる
-    outputFile.close();  // 出力ファイルを確実にクローズ
-    microSD.close();     // 入力ファイルも確実にクローズ
+    outputFile.close(); // 出力ファイルを確実にクローズ
+    microSD.close();    // 入力ファイルも確実にクローズ
 
     CPU_LED_2 = OFF;
     CPU_LED_3 = OFF;
@@ -3891,17 +3900,22 @@ void Open_Rep(void)
     // Serial2.println("=== End of Sections ===");
 }
 
-bool Check_StraightSection(uint16_t current_distance)
+int Check_StraightSection(uint16_t current_distance)
 {
     for (int i = 0; i < straight_section_count; i++)
     {
         if (current_distance >= straight_sections[i].start_distance &&
             current_distance <= straight_sections[i].end_distance - 1000)
         {
-            return true;
+            return ACCEL;
+        }
+        else if (current_distance >= straight_sections[i].end_distance - 1000 &&
+                 current_distance <= straight_sections[i].end_distance)
+        {
+            return BRAKE;
         }
     }
-    return false;
+    return OFF;
 }
 
 /************************************************************************/
@@ -4022,7 +4036,7 @@ void PDtrace_Control(short Dig, short SP, char boost_trig)
 
     const int Ofset = 20;
     const int F_Ofset = 40;      // 30
-    const int F_BrakeRatio = 80; // 90
+    const int F_BrakeRatio = 90; // 90
     const int R_BrakeRatio = 70; // 70
     const int Gain = 30;
 

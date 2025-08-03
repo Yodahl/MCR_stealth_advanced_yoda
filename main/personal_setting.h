@@ -244,7 +244,8 @@
 // #define ANA_SENS_UL (ad.getDataDual(SENS_A_UL) >> 4)
 
 #define BAR_ANGLE (1023 - (ad.getDataDual(SENS_A_VR) >> 4))
-#define SLOPE_ANGLE -1
+
+// #define SLOPE_ANGLE -1
 // #define ANA_SENS_L (ad.getDataDual(SENS_A_LL) >> 4)
 // #define ANA_SENS_R (ad.getDataDual(SENS_A_RR) >> 4)
 // #define SLOPE_ANGLE (ad.getDataDual(SENS_A_SAKA) >> 6)
@@ -266,14 +267,14 @@
 #define CPU_LED_2 (R_PORT2->PODR_b.PODR5)    // CPUボード LED2
 #define CPU_LED_3 (R_PORT1->PODR_b.PODR11)   // CPUボード LED3
 
-#define THRESHOLD_H 1000 // アナログセンサ(0～1023)白判定しきい値  1000
-#define THRESHOLD_L 800  // アナログセンサ(0～1023)黒判定しきい値  800
-
-#define THR_Sens 500    //白判定しきい値  800
-#define thrSensBK 150   //黒判定しきい値  200
+// #define THRESHOLD_H 1000 // アナログセンサ(0～1023)白判定しきい値  1000
+// #define THRESHOLD_L 800  // アナログセンサ(0～1023)黒判定しきい値  800
 
 #define ON 1
 #define OFF 0 // 走行パラメータ
+
+#define ACCEL 2
+#define BRAKE 1
 
 #define sLL 0
 #define sCL 1
@@ -286,9 +287,9 @@
 #define CORNER_PWM 100          // コーナー脱出時の最高PWM
 #define CORNER_FREEPWM_ANGLE 70 // コーナー　モータフリー（パーシャル）判定角度
 #define CORNER_FREEPWM_SPEED 1  // コーナー　モータフリースピード
-#define SLOPE_UP_SPEED 60       // 坂の上り速度 60= 4.0m/s
-#define SLOPE_DOWN_SPEED 60     // 坂の下り速度 60= 4.0m/s
-#define SLOPE_DOWN_SPEED 60     // 坂の下り速度 60= 4.0m/s
+// #define SLOPE_UP_SPEED 60       // 坂の上り速度 60= 4.0m/s
+// #define SLOPE_DOWN_SPEED 60     // 坂の下り速度 60= 4.0m/s
+// #define SLOPE_DOWN_SPEED 60     // 坂の下り速度 60= 4.0m/s
 
 
 
@@ -300,20 +301,26 @@ typedef struct {
 
 StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 
+
+#define THR_Sens 340    //白判定しきい値  800 400
+#define thrSensBK 100   //黒判定しきい値  200 150
+
+#define ACCEL_ANGLE 20  //再生走行用直線判断アングル
+
 /*
  *	レーン角度
  */
-#define LANE_ANGLE_R 110 // 右レーンアングル 95
-#define LANE_ANGLE_L 110 // 左レーンアングル 95
+#define LANE_ANGLE_R 120 // 右レーンアングル 125
+#define LANE_ANGLE_L 120 // 左レーンアングル 125
 /*
  *	クランク角度
  */
-#define CRANK_ANGLE_R 125 // 右クランクアングル 110
-#define CRANK_ANGLE_L 125 // 左クランクアングル 110
+#define CRANK_ANGLE_R 125 // 右クランクアングル 125
+#define CRANK_ANGLE_L 125 // 左クランクアングル 125
 /*
  *	舵角変換
  */
-#define VR_DEG_CHANGE 15 / 100
+// #define VR_DEG_CHANGE 15 / 100
 // #define VR_DEG_CHANGE 33 / 100 // 竹内
 // #define VR_DEG_CHANGE 1 / 5 // 早坂、平沢
 
@@ -330,7 +337,7 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 /*
  *	坂関連
  */
-#define SLOPE_UP_START 500   // 上り開始判定　200  500
+#define SLOPE_UP_START 550   // 上り開始判定　500
 
 /*
  *	内臓フラッシュ関連
@@ -363,9 +370,9 @@ typedef enum
   MAX_NUM_ADDR
 } FLASH_ADDR;
 
-#define MTPWM_START 70 //%
+// #define MTPWM_START 70 //%
 
 /*autoブレーキ関係*/
-#define F_Brake 80      //70
-#define R_Brake 40      //55
-#define Inside_ofset 80 //%　　80
+#define F_Brake 90      //70
+#define R_Brake 70      //55
+#define Inside_ofset 65 //%　　80
