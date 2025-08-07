@@ -302,10 +302,11 @@ typedef struct {
 StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 
 
-#define THR_Sens 340    //白判定しきい値  800 400
-#define thrSensBK 100   //黒判定しきい値  200 150
+#define THR_Sens 330    //白判定しきい値  800 400 340
+#define thrSensBK 100   //黒判定しきい値  200 150 100
 
 #define ACCEL_ANGLE 20  //再生走行用直線判断アングル
+#define BRAKE_DISTANCE 800  //再生走行用ブレーキング距離
 
 /*
  *	レーン角度
@@ -337,7 +338,7 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 /*
  *	坂関連
  */
-#define SLOPE_UP_START 550   // 上り開始判定　500
+#define SLOPE_UP_START 530   // 上り開始判定　550
 
 /*
  *	内臓フラッシュ関連
@@ -373,6 +374,6 @@ typedef enum
 // #define MTPWM_START 70 //%
 
 /*autoブレーキ関係*/
-#define F_Brake 90      //70
-#define R_Brake 70      //55
-#define Inside_ofset 65 //%　　80
+#define F_Brake 100      //70
+#define R_Brake 100      //55
+#define Inside_ofset 65 //%　　65
