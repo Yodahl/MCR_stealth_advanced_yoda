@@ -1,6 +1,6 @@
 /**********************************************************************/
 /**
- * @file	ra4m1_advance_oakako.ino
+ * @file	ra4m1_advance_okako.ino
  *
  * @brief	2024 RA4M1ベースプログラム.
  *0
@@ -87,15 +87,14 @@
 #define MOTOR_RR_B 76        // CN8 17 P115
 #define MOTOR_RR_A 77        // CN8 18 P114
 #define MOTOR_RR_PWM GTIOC2A // CN8 19 P113
+
 #define MOTOR_RL_A 48        // CN4  8 P412
 #define MOTOR_RL_B 49        // CN4  7 P413
 #define MOTOR_RL_PWM GTIOC0B // CN4  6 P414
+
 #define MOTOR_FR_A 73        // CN8 14 P610
 #define MOTOR_FR_B 74        // CN8 15 P609
 #define MOTOR_FR_PWM GTIOC4B // CN8 16 P608
-
-// #define MOTOR_FL_A			44			// CN4  3 P214
-// #define MOTOR_FL_B			45			// CN4  4 P708
 
 #define MOTOR_FL_A 51        // CN4  10 P410
 #define MOTOR_FL_B 50        // CN4  9 P411
@@ -203,13 +202,13 @@
 /*
  *	アナログセンサピン定義(@TODO ポートを確認の上設定)
  */
-#define SENS_A_UR 8  // CN8  2 D61　坂用右
-#define SENS_A_RR 16 // CN8  9 D68　マーカー右
-#define SENS_A_CR 24 // CN8  5 D64　トレース用右
+// #define SENS_A_UR 8  // CN8  2 D61　坂用右
+#define SENS_A_RR 17 // CN8  9 D68　マーカー右
+#define SENS_A_CR 10 // CN8  5 D64　トレース用右
 #define SENS_A_CC 25 // CN8  4 D63　真ん中
-#define SENS_A_CL 17 // CN8  3 D62　トレース用左
-#define SENS_A_LL 10 // CN8  8 D67　マーカー左
-#define SENS_A_UL 23 // CN8  6 D65　坂用左
+#define SENS_A_CL 24 // CN8  3 D62　トレース用左
+#define SENS_A_LL 16 // CN8  8 D67　マーカー左 23
+// #define SENS_A_UL 23 // CN8  6 D65　坂用左
 #define SENS_A_VR 18 // CN8  7 D66　ポテンショメータ
 // #define SENS_A_RR 16    // CN8  9 D68
 // #define SENS_A_LL 17    // CN8  8 D67
@@ -227,13 +226,13 @@
  *		R8仕様に合わせる為4bitシフトしているが、
  *		14bitを使う方が細かく動作が指定できるので要調整
  */
-#define ANA_SENS_UR (ad.getDataDual(SENS_A_UR))
+// #define ANA_SENS_UR (ad.getDataDual(SENS_A_UR))
 #define ANA_SENS_RR (ad.getDataDual(SENS_A_RR))
 #define ANA_SENS_CR (ad.getDataDual(SENS_A_CR))
 #define ANA_SENS_CC (ad.getDataDual(SENS_A_CC))
-#define ANA_SENS_LL (ad.getDataDual(SENS_A_CL))
-#define ANA_SENS_CL (ad.getDataDual(SENS_A_LL))
-#define ANA_SENS_UL (ad.getDataDual(SENS_A_UL))
+#define ANA_SENS_CL (ad.getDataDual(SENS_A_CL))
+#define ANA_SENS_LL (ad.getDataDual(SENS_A_LL))
+// #define ANA_SENS_UL (ad.getDataDual(SENS_A_UL))
 
 // #define ANA_SENS_UR (ad.getDataDual(SENS_A_UR) >> 4) // >> 4　↓
 // #define ANA_SENS_RR (ad.getDataDual(SENS_A_RR) >> 4)
@@ -293,31 +292,58 @@
 
 
 
-#define MAX_STRAIGHT_SECTIONS 50  // 最大直線区間数（必要に応じて調整）
+// ========== 直線区間構造体 ==========
+#define MAX_STRAIGHT_SECTIONS 50
+
 typedef struct {
-  uint16_t start_distance;
-  uint16_t end_distance;
+    uint32_t start_distance;    // 開始位置 [パルス]
+    uint32_t end_distance;      // 終了位置 [パルス]
+    float next_corner_speed;    // 次のコーナー速度 [m/s]
 } StraightSection;
 
 StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 
 
-#define THR_Sens 330    //白判定しきい値  800 400 340
-#define thrSensBK 100   //黒判定しきい値  200 150 100
+#define THR_Sens 400    //白判定しきい値  300
+#define THR_M_Sens 300  //白判定しきい値  280
+#define thrSensBK 100   //黒判定しきい値  200 150 100 使ってない
 
 #define ACCEL_ANGLE 20  //再生走行用直線判断アングル
 #define BRAKE_DISTANCE 800  //再生走行用ブレーキング距離
 
+#define TRACE 1
+#define STOP 0
+#define ANGLE 2
+
+#define CENTER 0
+#define RIGHT 1
+#define LEFT 2
+
+// ========== マシン仕様定数 ==========
+#define TIRE_DIAMETER   0.022f
+#define CONTROL_PERIOD  0.01f
+#define ENC_PULSE_REV   100.0f
+#define PI              3.14159265f
+
+// ========== 計算済み定数 ==========
+#define M_PER_PULSE     0.000691f
+#define CM_PER_PULSE    0.0691f
+#define PULSE_TO_MS     0.0691f
+#define MS_TO_PULSE_PER_10MS  14.468f
+
+// ========== 変換マクロ ==========
+#define DATA_TO_MS(x)   ((float)(x) / 10.0f)
+
 /*
  *	レーン角度
  */
-#define LANE_ANGLE_R 120 // 右レーンアングル 125
-#define LANE_ANGLE_L 120 // 左レーンアングル 125
+#define LANE_ANGLE_R 40 // 右レーンアングル 90
+#define LANE_ANGLE_L 40 // 左レーンアングル 90
 /*
  *	クランク角度
  */
-#define CRANK_ANGLE_R 125 // 右クランクアングル 125
-#define CRANK_ANGLE_L 125 // 左クランクアングル 125
+#define CRANK_ANGLE_R 90 // 右クランクアングル 110
+#define CRANK_ANGLE_L 90 // 左クランクアングル 110
 /*
  *	舵角変換
  */
@@ -329,16 +355,16 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
  *	ステアセンター値
  *	@note 必ず車体ごとに変更！！
  */
-#define VR_CENTER 537
+#define VR_CENTER 521 //497
 
 // 1mの距離
 // #define METER 1515L
-#define METER 1383L
+#define METER 1447L
 
 /*
  *	坂関連
  */
-#define SLOPE_UP_START 530   // 上り開始判定　550
+#define SLOPE_UP_START 530   // 上り開始判定　530
 
 /*
  *	内臓フラッシュ関連
@@ -376,4 +402,4 @@ typedef enum
 /*autoブレーキ関係*/
 #define F_Brake 100      //70
 #define R_Brake 100      //55
-#define Inside_ofset 65 //%　　65
+#define Inside_ofset 85 //%　　65

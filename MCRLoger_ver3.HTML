@@ -201,7 +201,7 @@
     
     // エンコーダ値を変換する関数
     function convertEncoderValue(iEncoder) {
-      return (iEncoder / 100) * (0.02375*3.14159265) / 0.01;
+      return (iEncoder) * ((0.022*3.14159265) / (0.01 * 100));
     }
     
     function processLogFile(lines) {
