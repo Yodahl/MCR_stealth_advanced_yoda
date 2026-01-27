@@ -216,7 +216,7 @@ void mcr_ad::start( void ) {
   R_ADC0->ADCSR_b.ADCS = 0b00;  // シングルスキャンモード
   R_ADC0->ADCSR_b.ADHSC = 0b0;  // 高速スキャンモード
   R_ADC0->ADCER_b.ADPRC = 0b11;  // 14bit精度
-  
+  R_ADC0->ADCER_b.ACE = 0;  // 14bit精度
 }
 
 //**********************************************************************

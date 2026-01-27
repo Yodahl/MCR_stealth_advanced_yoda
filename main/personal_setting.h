@@ -311,9 +311,9 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 #define ACCEL_ANGLE 20  //再生走行用直線判断アングル
 #define BRAKE_DISTANCE 800  //再生走行用ブレーキング距離
 
-#define TRACE 1
-#define STOP 0
-#define ANGLE 2
+#define STOP 0    //PWM＝0
+#define TRACE 1   //ライン追従
+#define ANGLE 2   //角度指定
 
 #define CENTER 0
 #define RIGHT 1
@@ -337,8 +337,8 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 /*
  *	レーン角度
  */
-#define LANE_ANGLE_R 40 // 右レーンアングル 90
-#define LANE_ANGLE_L 40 // 左レーンアングル 90
+#define LANE_ANGLE_R 45 // 右レーンアングル 90
+#define LANE_ANGLE_L 45 // 左レーンアングル 90
 /*
  *	クランク角度
  */
@@ -355,16 +355,17 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
  *	ステアセンター値
  *	@note 必ず車体ごとに変更！！
  */
-#define VR_CENTER 521 //497
+#define VR_CENTER 526 //497
 
 // 1mの距離
-// #define METER 1515L
 #define METER 1447L
 
 /*
  *	坂関連
  */
-#define SLOPE_UP_START 530   // 上り開始判定　530
+#define SLOPE_UP_START 450    // 上り開始判定   450
+
+#define SLOPE_DOWN_START 600  // 下り開始判定   500
 
 /*
  *	内臓フラッシュ関連
@@ -400,6 +401,6 @@ typedef enum
 // #define MTPWM_START 70 //%
 
 /*autoブレーキ関係*/
-#define F_Brake 100      //70
-#define R_Brake 100      //55
-#define Inside_ofset 85 //%　　65
+// #define F_Brake 100      //70
+// #define R_Brake 100      //55
+// #define Inside_ofset 65 //%　　85
