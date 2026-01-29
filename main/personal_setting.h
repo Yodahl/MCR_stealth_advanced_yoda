@@ -344,12 +344,9 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
  */
 #define CRANK_ANGLE_R 90 // 右クランクアングル 110
 #define CRANK_ANGLE_L 90 // 左クランクアングル 110
-/*
- *	舵角変換
- */
-// #define VR_DEG_CHANGE 15 / 100
-// #define VR_DEG_CHANGE 33 / 100 // 竹内
-// #define VR_DEG_CHANGE 1 / 5 // 早坂、平沢
+
+
+#define PWM_MAX 80  //足回りモーターのマックスPWM（記憶走行）
 
 /*
  *	ステアセンター値
@@ -363,7 +360,7 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 /*
  *	坂関連
  */
-#define SLOPE_UP_START 450    // 上り開始判定   450
+#define SLOPE_UP_START 420    // 上り開始判定   450
 
 #define SLOPE_DOWN_START 600  // 下り開始判定   500
 
